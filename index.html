@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NDMC 311 Report Generator</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <h1>NDMC 311 &mdash; Complaint Pendency Report Generator</h1>
+  <p>Raw complaint Excel upload karo &mdash; Dashboard aur Officer-Wise report approved sample format mein turant ban kar preview + PDF download ke liye taiyaar ho jaayenge. Sab calculation (aging, SLA, escalation) automatically raw data se hoti hai.</p>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>Step 1 &middot; Upload raw complaint Excel</h2>
+    <label class="fileDrop" id="dropZone">
+      <input type="file" id="fileInput" accept=".xlsx,.xls">
+      <div class="icon">&#128193;</div>
+      <div>Click to choose file, ya yahan drag-drop karo</div>
+      <div class="hint">.xlsx / .xls &middot; raw &ldquo;Complaint Sheet&rdquo; export</div>
+      <div class="name" id="fileName"></div>
+    </label>
+    <div class="msg" id="uploadMsg"></div>
+  </div>
+
+  <div class="card hidden" id="mapCard">
+    <h2>Step 2 &middot; Confirm columns &amp; report date</h2>
+    <table class="map-table" id="mapTable"></table>
+    <div class="row" style="margin-top:14px;">
+      <div class="field">
+        <label>Report Date (age is calculated against this date)</label>
+        <input type="date" id="reportDateInput">
+      </div>
+      <div class="field">
+        <label>Sheet</label>
+        <select id="sheetSelect"></select>
+      </div>
+      <button class="btn" id="generateBtn">Generate Report</button>
+    </div>
+    <div class="msg" id="mapMsg"></div>
+  </div>
+
+  <div class="card hidden" id="summaryCard">
+    <h2>Summary</h2>
+    <div class="stat-strip">
+      <div class="stat total"><div class="num" id="sTotal">0</div><div class="lbl">TOTAL PENDING</div></div>
+      <div class="stat sla"><div class="num" id="sSla">0</div><div class="lbl">WITHIN SLA</div></div>
+      <div class="stat esc"><div class="num" id="sEsc">0</div><div class="lbl">ESCALATED</div></div>
+    </div>
+    <div class="checklist" id="checklist"></div>
+    <div class="btnrow">
+      <button class="btn" id="dashPdfBtn">Download Dashboard PDF</button>
+      <button class="btn" id="offPdfBtn">Download Officer-Wise PDF</button>
+      <button class="btn secondary" id="excelBtn">Download Excel (3 sheets)</button>
+    </div>
+    <div class="msg" id="genMsg"></div>
+  </div>
+
+  <div class="card hidden" id="dashPreviewCard">
+    <h2>Dashboard Preview</h2>
+    <div class="previewOuter"><div id="dashboardRender"></div></div>
+  </div>
+
+  <div class="card hidden" id="offPreviewCard">
+    <h2>Officer-Wise Preview</h2>
+    <div class="previewOuter"><div id="officerRender"></div></div>
+  </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
