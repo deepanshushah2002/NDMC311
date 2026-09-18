@@ -1,4 +1,4 @@
-const MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
 let workbook = null;
 let currentHeaders = [];
 let currentRows = [];
@@ -21,252 +21,252 @@ const mapMsg = document.getElementById('mapMsg');
 // some devices, so we only add our own click-forward when the click did
 // NOT originate on the input itself (covers clicks that land on the
 // label's padding/icon/text, without double-triggering the native path).
-dropZone.addEventListener('click', (e)=>{
-  if(e.target !== fileInput){
+dropZone.addEventListener('click', (e) => {
+  if (e.target !== fileInput) {
     e.preventDefault();
     fileInput.click();
   }
 });
 
-['dragenter','dragover'].forEach(evt=>{
-  dropZone.addEventListener(evt, e=>{
+['dragenter', 'dragover'].forEach(evt => {
+  dropZone.addEventListener(evt, e => {
     e.preventDefault(); e.stopPropagation();
     dropZone.classList.add('has-file');
   });
 });
-['dragleave','dragend'].forEach(evt=>{
-  dropZone.addEventListener(evt, e=>{
+['dragleave', 'dragend'].forEach(evt => {
+  dropZone.addEventListener(evt, e => {
     e.preventDefault(); e.stopPropagation();
-    if(!fileInput.files.length) dropZone.classList.remove('has-file');
+    if (!fileInput.files.length) dropZone.classList.remove('has-file');
   });
 });
-dropZone.addEventListener('drop', e=>{
+dropZone.addEventListener('drop', e => {
   e.preventDefault(); e.stopPropagation();
   const dt = e.dataTransfer;
-  if(dt && dt.files && dt.files.length){ fileInput.files = dt.files; handleFile(dt.files[0]); }
+  if (dt && dt.files && dt.files.length) { fileInput.files = dt.files; handleFile(dt.files[0]); }
 });
 // Safety net: stop the browser from navigating away to the raw file if a
 // drop ever lands outside the drop zone itself.
-['dragover','drop'].forEach(evt=>{
-  window.addEventListener(evt, e=>{ e.preventDefault(); }, false);
+['dragover', 'drop'].forEach(evt => {
+  window.addEventListener(evt, e => { e.preventDefault(); }, false);
 });
-fileInput.addEventListener('change', ()=>{ if(fileInput.files.length) handleFile(fileInput.files[0]); });
+fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
 
 // Drag-and-drop of files between apps generally isn't supported on phone
 // browsers (Android/iOS) -- only desktop browsers support dragging a file
 // out of a file-manager window. Adjust the hint text on touch devices so
 // it doesn't promise something that won't work there.
-if(window.matchMedia && window.matchMedia('(pointer: coarse)').matches){
+if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
   const hintLine = dropZone.querySelector('div:nth-of-type(2)');
-  if(hintLine) hintLine.textContent = 'Tap here to choose a file';
+  if (hintLine) hintLine.textContent = 'Tap here to choose a file';
 }
 
 // default report date = today
-(function(){
+(function () {
   const t = new Date();
-  reportDateInput.value = t.toISOString().slice(0,10);
+  reportDateInput.value = t.toISOString().slice(0, 10);
 })();
 
-function showMsg(el, type, text){
+function showMsg(el, type, text) {
   el.className = 'msg ' + type;
   el.textContent = text;
 }
 
-function handleFile(file){
+function handleFile(file) {
   fileNameEl.textContent = file.name;
   dropZone.classList.add('has-file');
   uploadMsg.className = 'msg';
   const reader = new FileReader();
-  reader.onload = function(e){
-    try{
+  reader.onload = function (e) {
+    try {
       const data = new Uint8Array(e.target.result);
-      workbook = XLSX.read(data, {type:'array', cellDates:true});
+      workbook = XLSX.read(data, { type: 'array', cellDates: true });
       sheetSelect.innerHTML = '';
-      workbook.SheetNames.forEach(name=>{
+      workbook.SheetNames.forEach(name => {
         const opt = document.createElement('option');
         opt.value = name; opt.textContent = name;
         sheetSelect.appendChild(opt);
       });
       // prefer a sheet that looks like the complaint data
-      let preferred = workbook.SheetNames.find(n=>/complaint/i.test(n)) || workbook.SheetNames[0];
+      let preferred = workbook.SheetNames.find(n => /complaint/i.test(n)) || workbook.SheetNames[0];
       sheetSelect.value = preferred;
       loadSheet(preferred);
       mapCard.classList.remove('hidden');
-      showMsg(uploadMsg,'ok','File loaded: ' + file.name);
-    }catch(err){
-      showMsg(uploadMsg,'error','Could not read this file: ' + err.message);
+      showMsg(uploadMsg, 'ok', 'File loaded: ' + file.name);
+    } catch (err) {
+      showMsg(uploadMsg, 'error', 'Could not read this file: ' + err.message);
     }
   };
   reader.readAsArrayBuffer(file);
 }
 
-sheetSelect.addEventListener('change', ()=>loadSheet(sheetSelect.value));
+sheetSelect.addEventListener('change', () => loadSheet(sheetSelect.value));
 
-function loadSheet(name){
+function loadSheet(name) {
   const ws = workbook.Sheets[name];
-  const json = XLSX.utils.sheet_to_json(ws, {defval:'', raw:true});
-  if(!json.length){ showMsg(mapMsg,'error','Selected sheet has no data rows.'); return; }
+  const json = XLSX.utils.sheet_to_json(ws, { defval: '', raw: true });
+  if (!json.length) { showMsg(mapMsg, 'error', 'Selected sheet has no data rows.'); return; }
   currentHeaders = Object.keys(json[0]);
   currentRows = json;
   buildMapTable();
 }
 
-function normKey(s){ return s.toString().trim().toLowerCase().replace(/[^a-z0-9]/g,''); }
+function normKey(s) { return s.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, ''); }
 
-function guessColumn(candidates){
+function guessColumn(candidates) {
   const norm = currentHeaders.map(normKey);
-  for(const c of candidates){
+  for (const c of candidates) {
     const nc = normKey(c);
     let idx = norm.indexOf(nc);
-    if(idx>=0) return currentHeaders[idx];
+    if (idx >= 0) return currentHeaders[idx];
   }
-  for(const c of candidates){
+  for (const c of candidates) {
     const nc = normKey(c);
-    let idx = norm.findIndex(h=>h.includes(nc) || nc.includes(h));
-    if(idx>=0) return currentHeaders[idx];
+    let idx = norm.findIndex(h => h.includes(nc) || nc.includes(h));
+    if (idx >= 0) return currentHeaders[idx];
   }
   return currentHeaders[0] || '';
 }
 
 const FIELD_DEFS = [
-  {key:'date', label:'Complaint Date column', candidates:['Date','Complaint Date']},
-  {key:'dept', label:'Department column', candidates:['Department']},
-  {key:'officer', label:'Currently Assigned To (Officer) column', candidates:['Currently Assigned To']},
-  {key:'esc', label:'Is Escalated column', candidates:['Is Escalated']},
+  { key: 'date', label: 'Complaint Date column', candidates: ['Date', 'Complaint Date'] },
+  { key: 'dept', label: 'Department column', candidates: ['Department'] },
+  { key: 'officer', label: 'Currently Assigned To (Officer) column', candidates: ['Currently Assigned To'] },
+  { key: 'esc', label: 'Is Escalated column', candidates: ['Is Escalated'] },
 ];
 let mapSelections = {};
 
-function buildMapTable(){
+function buildMapTable() {
   mapTable.innerHTML = '';
-  FIELD_DEFS.forEach(f=>{
+  FIELD_DEFS.forEach(f => {
     const guess = guessColumn(f.candidates);
     mapSelections[f.key] = guess;
     const tr = document.createElement('tr');
     const td1 = document.createElement('td');
-    td1.style.fontWeight = '600'; td1.style.width='260px'; td1.style.color='#3a4a5c'; td1.style.fontSize='13px';
+    td1.style.fontWeight = '600'; td1.style.width = '260px'; td1.style.color = '#3a4a5c'; td1.style.fontSize = '13px';
     td1.textContent = f.label;
     const td2 = document.createElement('td');
     const sel = document.createElement('select');
     sel.style.cssText = 'padding:7px 8px;border:1px solid #c6d0da;border-radius:6px;font-size:13px;min-width:260px;';
-    currentHeaders.forEach(h=>{
+    currentHeaders.forEach(h => {
       const opt = document.createElement('option');
       opt.value = h; opt.textContent = h;
-      if(h===guess) opt.selected = true;
+      if (h === guess) opt.selected = true;
       sel.appendChild(opt);
     });
-    sel.addEventListener('change', ()=>{ mapSelections[f.key] = sel.value; });
+    sel.addEventListener('change', () => { mapSelections[f.key] = sel.value; });
     td2.appendChild(sel);
     tr.appendChild(td1); tr.appendChild(td2);
     mapTable.appendChild(tr);
   });
-  showMsg(mapMsg,'info','Columns auto-detected. Adjust if wrong, then set report date and click Generate.');
+  showMsg(mapMsg, 'info', 'Columns auto-detected. Adjust if wrong, then set report date and click Generate.');
 }
 
-function parseDateVal(v){
-  if(v instanceof Date && !isNaN(v)) return new Date(v.getFullYear(), v.getMonth(), v.getDate());
-  if(typeof v === 'number'){
-    try{
+function parseDateVal(v) {
+  if (v instanceof Date && !isNaN(v)) return new Date(v.getFullYear(), v.getMonth(), v.getDate());
+  if (typeof v === 'number') {
+    try {
       const d = XLSX.SSF.parse_date_code(v);
-      if(d) return new Date(d.y, d.m-1, d.d);
-    }catch(e){}
+      if (d) return new Date(d.y, d.m - 1, d.d);
+    } catch (e) { }
   }
-  if(typeof v === 'string'){
+  if (typeof v === 'string') {
     const s = v.trim();
     let m = s.match(/^(\d{1,2})[-\/]([A-Za-z]{3,})[-\/](\d{4})/);
-    if(m){
-      const day = parseInt(m[1],10);
-      const mon = MONTHS[m[2].toLowerCase().slice(0,3)];
-      const year = parseInt(m[3],10);
-      if(mon!==undefined) return new Date(year, mon, day);
+    if (m) {
+      const day = parseInt(m[1], 10);
+      const mon = MONTHS[m[2].toLowerCase().slice(0, 3)];
+      const year = parseInt(m[3], 10);
+      if (mon !== undefined) return new Date(year, mon, day);
     }
     m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
-    if(m){
-      return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10));
+    if (m) {
+      return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
     }
     const d2 = new Date(s);
-    if(!isNaN(d2)) return new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
+    if (!isNaN(d2)) return new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
   }
   return null;
 }
 
-function bucketOf(days){
-  if(days<=15) return 0;
-  if(days<=30) return 1;
-  if(days<=45) return 2;
-  if(days<=90) return 3;
+function bucketOf(days) {
+  if (days <= 15) return 0;
+  if (days <= 30) return 1;
+  if (days <= 45) return 2;
+  if (days <= 90) return 3;
   return 4;
 }
-const BUCKET_LABELS = ['0\u201315 Days','16\u201330 Days','31\u201345 Days','46\u201390 Days','More than 90 Days'];
+const BUCKET_LABELS = ['0\u201315 Days', '16\u201330 Days', '31\u201345 Days', '46\u201390 Days', 'More than 90 Days'];
 
-function fmtDateDDMMMYYYY(d){
-  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return String(d.getDate()).padStart(2,'0')+'-'+months[d.getMonth()]+'-'+d.getFullYear();
+function fmtDateDDMMMYYYY(d) {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return String(d.getDate()).padStart(2, '0') + '-' + months[d.getMonth()] + '-' + d.getFullYear();
 }
 
-document.getElementById('generateBtn').addEventListener('click', ()=>{
-  try{
-    if(!reportDateInput.value){ showMsg(mapMsg,'error','Please choose a report date.'); return; }
-    const [ry,rm,rd] = reportDateInput.value.split('-').map(x=>parseInt(x,10));
-    const reportDate = new Date(ry, rm-1, rd);
+document.getElementById('generateBtn').addEventListener('click', () => {
+  try {
+    if (!reportDateInput.value) { showMsg(mapMsg, 'error', 'Please choose a report date.'); return; }
+    const [ry, rm, rd] = reportDateInput.value.split('-').map(x => parseInt(x, 10));
+    const reportDate = new Date(ry, rm - 1, rd);
     const reportDateStr = fmtDateDDMMMYYYY(reportDate);
 
     const colDate = mapSelections.date, colDept = mapSelections.dept,
-          colOfficer = mapSelections.officer, colEsc = mapSelections.esc;
+      colOfficer = mapSelections.officer, colEsc = mapSelections.esc;
 
     const deptAgg = {}; // dept -> {total,escalated,buckets[5]}
     const offAgg = {};  // dept||officer -> {dept,officer,total,buckets[5]}
     let totalRows = 0, unparsedDates = 0;
 
-    currentRows.forEach(r=>{
-      let dept = (r[colDept]===undefined||r[colDept]===null) ? '' : r[colDept].toString().trim();
-      if(dept==='') dept = 'Unspecified Department';
-      let officer = (r[colOfficer]===undefined||r[colOfficer]===null) ? '' : r[colOfficer].toString().trim();
-      if(officer===''||officer==='-') officer = 'Unassigned';
-      const escRaw = (r[colEsc]===undefined||r[colEsc]===null) ? '' : r[colEsc].toString().trim().toLowerCase();
-      const isEsc = (escRaw==='yes' || escRaw==='y' || escRaw==='true' || escRaw==='1');
+    currentRows.forEach(r => {
+      let dept = (r[colDept] === undefined || r[colDept] === null) ? '' : r[colDept].toString().trim();
+      if (dept === '') dept = 'Unspecified Department';
+      let officer = (r[colOfficer] === undefined || r[colOfficer] === null) ? '' : r[colOfficer].toString().trim();
+      if (officer === '' || officer === '-') officer = 'Unassigned';
+      const escRaw = (r[colEsc] === undefined || r[colEsc] === null) ? '' : r[colEsc].toString().trim().toLowerCase();
+      const isEsc = (escRaw === 'yes' || escRaw === 'y' || escRaw === 'true' || escRaw === '1');
       const dateVal = parseDateVal(r[colDate]);
       let age = 0;
-      if(dateVal){
-        age = Math.floor((reportDate - dateVal)/86400000);
-        if(age<0) age=0;
+      if (dateVal) {
+        age = Math.floor((reportDate - dateVal) / 86400000);
+        if (age < 0) age = 0;
       } else { unparsedDates++; }
       const b = bucketOf(age);
 
       totalRows++;
-      if(!deptAgg[dept]) deptAgg[dept] = {total:0, escalated:0, buckets:[0,0,0,0,0]};
+      if (!deptAgg[dept]) deptAgg[dept] = { total: 0, escalated: 0, buckets: [0, 0, 0, 0, 0] };
       deptAgg[dept].total++;
-      if(isEsc){ deptAgg[dept].escalated++; deptAgg[dept].buckets[b]++; }
+      if (isEsc) { deptAgg[dept].escalated++; deptAgg[dept].buckets[b]++; }
 
-      const key = dept+'||'+officer;
-      if(!offAgg[key]) offAgg[key] = {dept, officer, total:0, buckets:[0,0,0,0,0]};
+      const key = dept + '||' + officer;
+      if (!offAgg[key]) offAgg[key] = { dept, officer, total: 0, buckets: [0, 0, 0, 0, 0] };
       offAgg[key].total++;
       offAgg[key].buckets[b]++;
     });
 
     // department list sorted desc by total pending
-    let deptList = Object.keys(deptAgg).map(name=>{
+    let deptList = Object.keys(deptAgg).map(name => {
       const a = deptAgg[name];
-      return {name, total:a.total, escalated:a.escalated, withinSla:a.total-a.escalated, buckets:a.buckets};
+      return { name, total: a.total, escalated: a.escalated, withinSla: a.total - a.escalated, buckets: a.buckets };
     });
-    deptList.sort((a,b)=> b.total - a.total || a.name.localeCompare(b.name));
+    deptList.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
 
     // officers grouped by department, ordered same as deptList; sorted desc within dept
     const offByDept = {};
-    Object.values(offAgg).forEach(o=>{
-      if(!offByDept[o.dept]) offByDept[o.dept]=[];
+    Object.values(offAgg).forEach(o => {
+      if (!offByDept[o.dept]) offByDept[o.dept] = [];
       offByDept[o.dept].push(o);
     });
-    Object.keys(offByDept).forEach(d=>{
-      offByDept[d].sort((a,b)=> b.total-a.total || a.officer.localeCompare(b.officer));
+    Object.keys(offByDept).forEach(d => {
+      offByDept[d].sort((a, b) => b.total - a.total || a.officer.localeCompare(b.officer));
     });
 
-    const grand = deptList.reduce((acc,d)=>{
-      acc.total+=d.total; acc.escalated+=d.escalated; acc.withinSla+=d.withinSla;
-      for(let i=0;i<5;i++) acc.buckets[i]+=d.buckets[i];
+    const grand = deptList.reduce((acc, d) => {
+      acc.total += d.total; acc.escalated += d.escalated; acc.withinSla += d.withinSla;
+      for (let i = 0; i < 5; i++) acc.buckets[i] += d.buckets[i];
       return acc;
-    }, {total:0,escalated:0,withinSla:0,buckets:[0,0,0,0,0]});
+    }, { total: 0, escalated: 0, withinSla: 0, buckets: [0, 0, 0, 0, 0] });
 
-    computed = {deptList, offByDept, grand, reportDateStr, totalRows, unparsedDates};
+    computed = { deptList, offByDept, grand, reportDateStr, totalRows, unparsedDates };
 
     renderSummary();
     renderDashboard();
@@ -274,32 +274,32 @@ document.getElementById('generateBtn').addEventListener('click', ()=>{
     document.getElementById('summaryCard').classList.remove('hidden');
     document.getElementById('dashPreviewCard').classList.remove('hidden');
     document.getElementById('offPreviewCard').classList.remove('hidden');
-    document.getElementById('summaryCard').scrollIntoView({behavior:'smooth', block:'start'});
-  }catch(err){
-    showMsg(mapMsg,'error','Error while generating: '+err.message);
+    document.getElementById('summaryCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    showMsg(mapMsg, 'error', 'Error while generating: ' + err.message);
     console.error(err);
   }
 });
 
-function renderSummary(){
+function renderSummary() {
   const g = computed.grand;
   document.getElementById('sTotal').textContent = g.total;
   document.getElementById('sSla').textContent = g.withinSla;
   document.getElementById('sEsc').textContent = g.escalated;
-  const bucketSum = g.buckets.reduce((a,b)=>a+b,0);
-  const offTotalCheck = Object.values(computed.offByDept).flat().every(o=> o.buckets.reduce((a,b)=>a+b,0)===o.total);
-  const deptSumCheck = computed.deptList.every(d=> d.withinSla+d.escalated===d.total);
+  const bucketSum = g.buckets.reduce((a, b) => a + b, 0);
+  const offTotalCheck = Object.values(computed.offByDept).flat().every(o => o.buckets.reduce((a, b) => a + b, 0) === o.total);
+  const deptSumCheck = computed.deptList.every(d => d.withinSla + d.escalated === d.total);
   let html = '';
-  html += `Total rows read: <b>${computed.totalRows}</b>` + (computed.unparsedDates? ` &nbsp;(<span class="bad">${computed.unparsedDates} rows had an unreadable date &mdash; aged as 0 days</span>)`:'') + '<br>';
-  html += `Check &middot; Total Pending = Within SLA + Escalated: <span class="${deptSumCheck?'ok':'bad'}">${deptSumCheck?'PASS':'FAIL'}</span> &nbsp;&middot;&nbsp; `;
-  html += `Dashboard aging buckets total (${bucketSum}) = Overall Escalated (${g.escalated}): <span class="${bucketSum===g.escalated?'ok':'bad'}">${bucketSum===g.escalated?'PASS':'FAIL'}</span> &nbsp;&middot;&nbsp; `;
-  html += `Officer aging = Officer total (every officer): <span class="${offTotalCheck?'ok':'bad'}">${offTotalCheck?'PASS':'FAIL'}</span>`;
+  html += `Total rows read: <b>${computed.totalRows}</b>` + (computed.unparsedDates ? ` &nbsp;(<span class="bad">${computed.unparsedDates} rows had an unreadable date &mdash; aged as 0 days</span>)` : '') + '<br>';
+  html += `Check &middot; Total Pending = Within SLA + Escalated: <span class="${deptSumCheck ? 'ok' : 'bad'}">${deptSumCheck ? 'PASS' : 'FAIL'}</span> &nbsp;&middot;&nbsp; `;
+  html += `Dashboard aging buckets total (${bucketSum}) = Overall Escalated (${g.escalated}): <span class="${bucketSum === g.escalated ? 'ok' : 'bad'}">${bucketSum === g.escalated ? 'PASS' : 'FAIL'}</span> &nbsp;&middot;&nbsp; `;
+  html += `Officer aging = Officer total (every officer): <span class="${offTotalCheck ? 'ok' : 'bad'}">${offTotalCheck ? 'PASS' : 'FAIL'}</span>`;
   document.getElementById('checklist').innerHTML = html;
 }
 
-function renderDashboard(){
-  const {deptList, grand, reportDateStr} = computed;
-  let rows = deptList.map(d=>`
+function renderDashboard() {
+  const { deptList, grand, reportDateStr } = computed;
+  let rows = deptList.map(d => `
     <tr>
       <td class="dept-name-cell">${escapeHtml(d.name)}</td>
       <td class="lightblue">${d.total}</td>
@@ -346,19 +346,19 @@ function renderDashboard(){
   document.getElementById('dashboardRender').innerHTML = html;
 }
 
-function renderOfficerWise(){
-  const {deptList, offByDept, reportDateStr} = computed;
+function renderOfficerWise() {
+  const { deptList, offByDept, reportDateStr } = computed;
   let blocks = '';
-  deptList.forEach(d=>{
+  deptList.forEach(d => {
     const officers = offByDept[d.name] || [];
-    let rows = officers.map((o,i)=>`
+    let rows = officers.map((o, i) => `
       <tr>
-        <td>${i+1}</td>
+        <td>${i + 1}</td>
         <td class="off-name-cell">${escapeHtml(o.officer)}</td>
         <td>${o.total}</td>
         <td>${o.buckets[0]}</td><td>${o.buckets[1]}</td><td>${o.buckets[2]}</td><td>${o.buckets[3]}</td><td>${o.buckets[4]}</td>
       </tr>`).join('');
-    const totals = officers.reduce((acc,o)=>{acc.total+=o.total; for(let i=0;i<5;i++) acc.b[i]+=o.buckets[i]; return acc;}, {total:0,b:[0,0,0,0,0]});
+    const totals = officers.reduce((acc, o) => { acc.total += o.total; for (let i = 0; i < 5; i++) acc.b[i] += o.buckets[i]; return acc; }, { total: 0, b: [0, 0, 0, 0, 0] });
     blocks += `
     <div class="off-block" data-dept-block="1">
       <div class="off-dept-bar">${escapeHtml(d.name)}</div>
@@ -383,27 +383,27 @@ function renderOfficerWise(){
   document.getElementById('officerRender').innerHTML = html;
 }
 
-function escapeHtml(s){
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /* ---------------- PDF / FILE EXPORT ---------------- */
 
-async function renderNodeToCanvas(node){
-  return await html2canvas(node, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+async function renderNodeToCanvas(node) {
+  return await html2canvas(node, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
 }
 
 let _downloadsCap; // cached promise
-function getDownloads(){
-  if(!_downloadsCap){
+function getDownloads() {
+  if (!_downloadsCap) {
     _downloadsCap = (window.claude && typeof window.claude.use === 'function')
-      ? window.claude.use('downloads').catch(()=>null)
+      ? window.claude.use('downloads').catch(() => null)
       : Promise.resolve(null);
   }
   return _downloadsCap;
 }
 
-function downloadErrorText(err){
+function downloadErrorText(err) {
   const code = err && err.code;
   const map = {
     declined: 'Save was cancelled.',
@@ -420,10 +420,10 @@ function downloadErrorText(err){
 // Saves a Blob under `filename`, using the artifact downloads capability
 // when this page is running as a published artifact, falling back to a
 // plain browser download link otherwise (e.g. inside the chat preview).
-async function saveBlob(filename, blob){
+async function saveBlob(filename, blob) {
   const downloads = await getDownloads();
-  if(downloads){
-    await downloads.save({filename, data: blob});
+  if (downloads) {
+    await downloads.save({ filename, data: blob });
     return 'saved';
   }
   // fallback: classic anchor download (works in the inline chat preview)
@@ -431,52 +431,52 @@ async function saveBlob(filename, blob){
   const a = document.createElement('a');
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
   return 'saved';
 }
 
-document.getElementById('dashPdfBtn').addEventListener('click', async ()=>{
+document.getElementById('dashPdfBtn').addEventListener('click', async () => {
   const btn = document.getElementById('dashPdfBtn');
   const genMsg = document.getElementById('genMsg');
   btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>Building PDF...';
-  try{
+  try {
     const node = document.getElementById('dashboardCanvasTarget');
     const canvas = await renderNodeToCanvas(node);
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4', compress:true});
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
     const margin = 8;
-    const maxW = pageW - margin*2;
-    const maxH = pageH - margin*2;
+    const maxW = pageW - margin * 2;
+    const maxH = pageH - margin * 2;
     const ratio = canvas.height / canvas.width;
-    let w = maxW, h = w*ratio;
-    if(h > maxH){ h = maxH; w = h/ratio; }
-    const x = (pageW - w)/2;
+    let w = maxW, h = w * ratio;
+    if (h > maxH) { h = maxH; w = h / ratio; }
+    const x = (pageW - w) / 2;
     const y = margin;
     doc.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', x, y, w, h, undefined, 'MEDIUM');
     const blob = doc.output('blob');
     await saveBlob('NDMC_311_Dashboard_' + computed.reportDateStr + '.pdf', blob);
-    showMsg(genMsg,'ok','Dashboard PDF ready.');
-  }catch(err){
-    showMsg(genMsg,'error','PDF: '+downloadErrorText(err));
+    showMsg(genMsg, 'ok', 'Dashboard PDF ready.');
+  } catch (err) {
+    showMsg(genMsg, 'error', 'PDF: ' + downloadErrorText(err));
     console.error(err);
-  }finally{
+  } finally {
     btn.disabled = false; btn.innerHTML = orig;
   }
 });
 
-document.getElementById('offPdfBtn').addEventListener('click', async ()=>{
+document.getElementById('offPdfBtn').addEventListener('click', async () => {
   const btn = document.getElementById('offPdfBtn');
   const genMsg = document.getElementById('genMsg');
   btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>Building PDF...';
-  try{
+  try {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4', compress:true});
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
     const margin = 8;
-    const maxW = pageW - margin*2;
+    const maxW = pageW - margin * 2;
 
     // Measure each segment's exact box (title + each department block) in
     // CSS px BEFORE capturing, so slices line up perfectly with no
@@ -484,7 +484,7 @@ document.getElementById('offPdfBtn').addEventListener('click', async ()=>{
     const container = document.getElementById('officerCanvasTarget');
     const containerRect = container.getBoundingClientRect();
     const segEls = [document.getElementById('officerTitleBlock'), ...document.querySelectorAll('[data-dept-block]')];
-    const segments = segEls.map(el=>{
+    const segments = segEls.map(el => {
       const r = el.getBoundingClientRect();
       return { top: r.top - containerRect.top, height: r.height };
     });
@@ -496,12 +496,12 @@ document.getElementById('offPdfBtn').addEventListener('click', async ()=>{
     const gapMm = 4;
 
     let curY = margin;
-    segments.forEach((seg, idx)=>{
+    segments.forEach((seg, idx) => {
       const segTopPx = Math.round(seg.top * scaleFactor);
       const segHeightPx = Math.max(1, Math.round(seg.height * scaleFactor));
       const segHmm = segHeightPx * mmPerPx;
 
-      if(idx > 0 && curY + segHmm > pageH - margin){
+      if (idx > 0 && curY + segHmm > pageH - margin) {
         doc.addPage();
         curY = margin;
       }
@@ -517,27 +517,27 @@ document.getElementById('offPdfBtn').addEventListener('click', async ()=>{
     });
     const blob = doc.output('blob');
     await saveBlob('NDMC_311_OfficerWise_' + computed.reportDateStr + '.pdf', blob);
-    showMsg(genMsg,'ok','Officer-Wise PDF ready.');
-  }catch(err){
-    showMsg(genMsg,'error','PDF: '+downloadErrorText(err));
+    showMsg(genMsg, 'ok', 'Officer-Wise PDF ready.');
+  } catch (err) {
+    showMsg(genMsg, 'error', 'PDF: ' + downloadErrorText(err));
     console.error(err);
-  }finally{
+  } finally {
     btn.disabled = false; btn.innerHTML = orig;
   }
 });
 
-document.getElementById('excelBtn').addEventListener('click', async ()=>{
+document.getElementById('excelBtn').addEventListener('click', async () => {
   const btn = document.getElementById('excelBtn');
   const genMsg = document.getElementById('genMsg');
   btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>Building Excel...';
-  try{
+  try {
     const blob = await buildStyledExcelBlob();
     await saveBlob('NDMC_311_Report_' + computed.reportDateStr + '.xlsx', blob);
-    showMsg(genMsg,'ok','Excel file ready.');
-  }catch(err){
-    showMsg(genMsg,'error','Excel: '+downloadErrorText(err));
+    showMsg(genMsg, 'ok', 'Excel file ready.');
+  } catch (err) {
+    showMsg(genMsg, 'error', 'Excel: ' + downloadErrorText(err));
     console.error(err);
-  }finally{
+  } finally {
     btn.disabled = false; btn.innerHTML = orig;
   }
 });
@@ -545,40 +545,40 @@ document.getElementById('excelBtn').addEventListener('click', async ()=>{
 // Builds the 3-sheet workbook with the same navy/light-blue/green/red
 // colour scheme as the Dashboard & Officer-Wise report, using ExcelJS
 // (the plain XLSX writer used elsewhere in this file has no styling API).
-async function buildStyledExcelBlob(){
-  const {deptList, offByDept, grand, reportDateStr} = computed;
+async function buildStyledExcelBlob() {
+  const { deptList, offByDept, grand, reportDateStr } = computed;
   const wb = new ExcelJS.Workbook();
 
   const NAVY = 'FF1F4E78', NAVY_DARK = 'FF17365D', LIGHTBLUE = 'FFBDD7EE', GREEN = 'FF92D050', RED = 'FFFF0000';
-  const WHITE_BOLD = {bold:true, color:{argb:'FFFFFFFF'}};
-  const NAVYTXT_BOLD = {bold:true, color:{argb:'FF12324F'}};
-  const GREENTXT_BOLD = {bold:true, color:{argb:'FF1C3D00'}};
-  const REDTXT_BOLD = {bold:true, color:{argb:'FFFFFFFF'}};
-  const THIN = {style:'thin', color:{argb:'FF16324D'}};
-  const BORDER_ALL = {top:THIN,left:THIN,bottom:THIN,right:THIN};
+  const WHITE_BOLD = { bold: true, color: { argb: 'FFFFFFFF' } };
+  const NAVYTXT_BOLD = { bold: true, color: { argb: 'FF12324F' } };
+  const GREENTXT_BOLD = { bold: true, color: { argb: 'FF1C3D00' } };
+  const REDTXT_BOLD = { bold: true, color: { argb: 'FFFFFFFF' } };
+  const THIN = { style: 'thin', color: { argb: 'FF16324D' } };
+  const BORDER_ALL = { top: THIN, left: THIN, bottom: THIN, right: THIN };
 
-  function fill(cell, argb){ cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb}}; }
-  function border(cell){ cell.border = BORDER_ALL; }
-  function centre(cell, wrap){ cell.alignment = {horizontal:'center', vertical:'middle', wrapText: !!wrap}; }
+  function fill(cell, argb) { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } }; }
+  function border(cell) { cell.border = BORDER_ALL; }
+  function centre(cell, wrap) { cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: !!wrap }; }
 
   /* ---------------- Dashboard sheet ---------------- */
   const dash = wb.addWorksheet('Dashboard');
   dash.columns = [
-    {width:30},{width:12},{width:12},{width:12},{width:10},{width:10},{width:10},{width:10},{width:12}
+    { width: 30 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 12 }
   ];
 
   dash.mergeCells('A1:I1');
   const dTitle = dash.getCell('A1');
   dTitle.value = '311 APP-PENDING COMPLAINTS \u2013 MANAGEMENT DASHBOARD';
-  dTitle.font = {...WHITE_BOLD, size:15};
+  dTitle.font = { ...WHITE_BOLD, size: 15 };
   centre(dTitle); fill(dTitle, NAVY);
   dash.getRow(1).height = 24;
 
   dash.mergeCells('A2:I2');
   const dAsOf = dash.getCell('A2');
   dAsOf.value = 'As on ' + reportDateStr;
-  dAsOf.font = {bold:true};
-  dAsOf.alignment = {horizontal:'right'};
+  dAsOf.font = { bold: true };
+  dAsOf.alignment = { horizontal: 'right' };
 
   dash.mergeCells('A4:C4');
   const ovBar = dash.getCell('A4');
@@ -586,15 +586,15 @@ async function buildStyledExcelBlob(){
 
   const ovHeadRow = 5, ovValRow = 6;
   const ovCols = [
-    {label:'TOTAL PENDING', bg:LIGHTBLUE, font:NAVYTXT_BOLD, val: grand.total},
-    {label:'Within SLA', bg:GREEN, font:GREENTXT_BOLD, val: `${grand.withinSla} (OUT OF ${grand.total})`},
-    {label:'ESCALATED', bg:RED, font:REDTXT_BOLD, val: `${grand.escalated} (OUT OF ${grand.total})`},
+    { label: 'TOTAL PENDING', bg: LIGHTBLUE, font: NAVYTXT_BOLD, val: grand.total },
+    { label: 'Within SLA', bg: GREEN, font: GREENTXT_BOLD, val: `${grand.withinSla} (OUT OF ${grand.total})` },
+    { label: 'ESCALATED', bg: RED, font: REDTXT_BOLD, val: `${grand.escalated} (OUT OF ${grand.total})` },
   ];
-  ovCols.forEach((col,i)=>{
-    const hc = dash.getCell(ovHeadRow, i+1);
+  ovCols.forEach((col, i) => {
+    const hc = dash.getCell(ovHeadRow, i + 1);
     hc.value = col.label; hc.font = col.font; centre(hc); fill(hc, col.bg); border(hc);
-    const vc = dash.getCell(ovValRow, i+1);
-    vc.value = col.val; vc.font = {...col.font, size:13}; centre(vc); fill(vc, col.bg); border(vc);
+    const vc = dash.getCell(ovValRow, i + 1);
+    vc.value = col.val; vc.font = { ...col.font, size: 13 }; centre(vc); fill(vc, col.bg); border(vc);
   });
 
   dash.mergeCells('A8:I8');
@@ -602,73 +602,73 @@ async function buildStyledExcelBlob(){
   dwBar.value = 'DEPARTMENT-WISE PENDENCY'; dwBar.font = WHITE_BOLD; centre(dwBar); fill(dwBar, NAVY_DARK);
 
   const headRowNum = 9;
-  const headers = ['Department','Total Pending','Within SLA','Escalated','0\u201315 Days','16\u201330 Days','31\u201345 Days','46\u201390 Days','More than 90 Days'];
-  headers.forEach((h,i)=>{
-    const c = dash.getCell(headRowNum, i+1);
+  const headers = ['Department', 'Total Pending', 'Within SLA', 'Escalated', '0\u201315 Days', '16\u201330 Days', '31\u201345 Days', '46\u201390 Days', 'More than 90 Days'];
+  headers.forEach((h, i) => {
+    const c = dash.getCell(headRowNum, i + 1);
     c.value = h; c.font = WHITE_BOLD; centre(c, true); fill(c, NAVY_DARK); border(c);
   });
 
   let r = headRowNum + 1;
-  deptList.forEach(d=>{
+  deptList.forEach(d => {
     const rowVals = [d.name, d.total, d.withinSla, d.escalated, ...d.buckets];
-    rowVals.forEach((v,i)=>{
-      const c = dash.getCell(r, i+1);
+    rowVals.forEach((v, i) => {
+      const c = dash.getCell(r, i + 1);
       c.value = v; border(c);
-      if(i===0){ c.alignment = {horizontal:'left', vertical:'middle'}; }
+      if (i === 0) { c.alignment = { horizontal: 'left', vertical: 'middle' }; }
       else centre(c);
-      if(i===1){ fill(c, LIGHTBLUE); c.font = NAVYTXT_BOLD; }
-      else if(i===2){ fill(c, GREEN); c.font = GREENTXT_BOLD; }
-      else if(i===3){ fill(c, RED); c.font = REDTXT_BOLD; }
+      if (i === 1) { fill(c, LIGHTBLUE); c.font = NAVYTXT_BOLD; }
+      else if (i === 2) { fill(c, GREEN); c.font = GREENTXT_BOLD; }
+      else if (i === 3) { fill(c, RED); c.font = REDTXT_BOLD; }
     });
     r++;
   });
   const totalVals = ['TOTAL', grand.total, grand.withinSla, grand.escalated, ...grand.buckets];
-  totalVals.forEach((v,i)=>{
-    const c = dash.getCell(r, i+1);
+  totalVals.forEach((v, i) => {
+    const c = dash.getCell(r, i + 1);
     c.value = v; c.font = WHITE_BOLD; centre(c); fill(c, NAVY); border(c);
   });
 
   /* ---------------- Officers Wise sheet ---------------- */
   const off = wb.addWorksheet('Officers Wise');
-  off.columns = [{width:7},{width:36},{width:13},{width:11},{width:11},{width:11},{width:11},{width:14}];
+  off.columns = [{ width: 7 }, { width: 36 }, { width: 13 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 14 }];
 
   off.mergeCells('A1:H1');
   const oTitle = off.getCell('A1');
   oTitle.value = 'OFFICER-WISE PENDENCY AS ON ' + reportDateStr.toUpperCase();
-  oTitle.font = {...WHITE_BOLD, size:15}; centre(oTitle); fill(oTitle, NAVY);
+  oTitle.font = { ...WHITE_BOLD, size: 15 }; centre(oTitle); fill(oTitle, NAVY);
   off.getRow(1).height = 24;
 
   let orow = 3;
-  const offHeaders = ['S.No.','Officer','Total Pending','0\u201315 Days','16\u201330 Days','31\u201345 Days','46\u201390 Days','More than 90 Days'];
-  deptList.forEach(d=>{
+  const offHeaders = ['S.No.', 'Officer', 'Total Pending', '0\u201315 Days', '16\u201330 Days', '31\u201345 Days', '46\u201390 Days', 'More than 90 Days'];
+  deptList.forEach(d => {
     off.mergeCells(`A${orow}:H${orow}`);
-    const bar = off.getCell(orow,1);
-    bar.value = d.name; bar.font = WHITE_BOLD; bar.alignment = {horizontal:'left', vertical:'middle', indent:1}; fill(bar, NAVY); border(bar);
+    const bar = off.getCell(orow, 1);
+    bar.value = d.name; bar.font = WHITE_BOLD; bar.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }; fill(bar, NAVY); border(bar);
     orow++;
 
-    offHeaders.forEach((h,i)=>{
-      const c = off.getCell(orow, i+1);
+    offHeaders.forEach((h, i) => {
+      const c = off.getCell(orow, i + 1);
       c.value = h; c.font = WHITE_BOLD; centre(c, true); fill(c, NAVY_DARK); border(c);
     });
     orow++;
 
     const officers = offByDept[d.name] || [];
-    officers.forEach((o, idx)=>{
-      const vals = [idx+1, o.officer, o.total, ...o.buckets];
-      vals.forEach((v,i)=>{
-        const c = off.getCell(orow, i+1);
+    officers.forEach((o, idx) => {
+      const vals = [idx + 1, o.officer, o.total, ...o.buckets];
+      vals.forEach((v, i) => {
+        const c = off.getCell(orow, i + 1);
         c.value = v; border(c);
-        c.alignment = i===1 ? {horizontal:'left', vertical:'middle'} : {horizontal:'center', vertical:'middle'};
+        c.alignment = i === 1 ? { horizontal: 'left', vertical: 'middle' } : { horizontal: 'center', vertical: 'middle' };
       });
       orow++;
     });
 
-    const totals = officers.reduce((acc,o)=>{acc.total+=o.total; for(let i=0;i<5;i++) acc.b[i]+=o.buckets[i]; return acc;}, {total:0,b:[0,0,0,0,0]});
+    const totals = officers.reduce((acc, o) => { acc.total += o.total; for (let i = 0; i < 5; i++) acc.b[i] += o.buckets[i]; return acc; }, { total: 0, b: [0, 0, 0, 0, 0] });
     off.mergeCells(`A${orow}:B${orow}`);
-    const totLbl = off.getCell(orow,1);
+    const totLbl = off.getCell(orow, 1);
     totLbl.value = 'TOTAL'; totLbl.font = WHITE_BOLD; centre(totLbl); fill(totLbl, NAVY); border(totLbl);
-    [totals.total, ...totals.b].forEach((v,i)=>{
-      const c = off.getCell(orow, i+3);
+    [totals.total, ...totals.b].forEach((v, i) => {
+      const c = off.getCell(orow, i + 3);
       c.value = v; c.font = WHITE_BOLD; centre(c); fill(c, NAVY); border(c);
     });
     orow += 2; // blank spacer row before next department
@@ -676,18 +676,18 @@ async function buildStyledExcelBlob(){
 
   /* ---------------- Source Data sheet (raw, unchanged) ---------------- */
   const src = wb.addWorksheet('Source Data');
-  if(currentRows.length){
+  if (currentRows.length) {
     const cols = Object.keys(currentRows[0]);
-    cols.forEach((c,i)=>{ src.getColumn(i+1).width = Math.min(28, Math.max(11, c.length+2)); });
+    cols.forEach((c, i) => { src.getColumn(i + 1).width = Math.min(28, Math.max(11, c.length + 2)); });
     const headerRow = src.getRow(1);
-    cols.forEach((h,i)=>{ headerRow.getCell(i+1).value = h; });
-    headerRow.eachCell(c=>{ c.font = WHITE_BOLD; fill(c, NAVY_DARK); centre(c); });
-    currentRows.forEach((row,ri)=>{
-      const excelRow = src.getRow(ri+2);
-      cols.forEach((h,i)=>{ excelRow.getCell(i+1).value = row[h]; });
+    cols.forEach((h, i) => { headerRow.getCell(i + 1).value = h; });
+    headerRow.eachCell(c => { c.font = WHITE_BOLD; fill(c, NAVY_DARK); centre(c); });
+    currentRows.forEach((row, ri) => {
+      const excelRow = src.getRow(ri + 2);
+      cols.forEach((h, i) => { excelRow.getCell(i + 1).value = row[h]; });
     });
   }
 
   const buffer = await wb.xlsx.writeBuffer();
-  return new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
