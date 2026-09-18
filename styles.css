@@ -22,6 +22,14 @@
     color: var(--ink);
   }
 
+  .made-by {
+    text-align: right;
+    padding: 20px 25px;
+    font-size: 10px;
+    color: #666;
+    font-weight: 500;
+  }
+
   header {
     background: linear-gradient(135deg, var(--navy-dark), var(--navy));
     color: #fff;
