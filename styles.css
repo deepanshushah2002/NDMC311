@@ -22,25 +22,24 @@
     color: var(--ink);
   }
 
-.made-by {
-  text-align: right;
-  padding: 20px 25px;
-  font-size: 12px;
-  color: #777;
-  font-weight: 500;
-  letter-spacing: 0.3px;
-  
-}
+  .made-by {
+    text-align: right;
+    padding: 20px 25px;
+    font-size: 12px;
+    color: #777;
+    font-weight: 500;
+    letter-spacing: 0.3px; 
+  }
 
-.made-by a {
-  text-decoration: none;
-  color: inherit;
-}
+  .made-by a {
+    text-decoration: none;
+    color: inherit;
+  }
 
-.made-by strong {
-  color: #333;
-  font-weight: 600;
-}
+  .made-by strong {
+    color: #333;
+    font-weight: bold;
+  }
 
 
   .update-banner {
