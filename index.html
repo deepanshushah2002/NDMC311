@@ -4,101 +4,321 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NDMC 311 Report Generator</title>
+  <title>NDMC 311 &mdash; Complaint Pendency Intelligence</title>
+  <meta name="description" content="Next-Generation NDMC 311 Complaint Pendency & SLA Intelligence Studio. Automated data aggregation, aging analytics, executive dashboards, and instant PDF/Excel reporting.">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  
   <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
+  <!-- Ambient 3D background elements -->
+  <div class="bg-scene" aria-hidden="true">
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+    <div class="bg-orb orb-3"></div>
+    <div class="bg-grid"></div>
+  </div>
 
-  <header>
-    <h1>NDMC 311 &mdash; Complaint Pendency Report Generator</h1>
+  <!-- Floating Glass Navigation -->
+  <header class="navbar-wrapper">
+    <nav class="navbar glass-card">
+      <div class="nav-brand">
+        <div class="brand-logo-3d">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="logo-svg">
+            <defs>
+              <linearGradient id="logoGrad" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#3b82f6" />
+                <stop offset="0.5" stop-color="#6366f1" />
+                <stop offset="1" stop-color="#06b6d4" />
+              </linearGradient>
+            </defs>
+            <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#logoGrad)" />
+            <path d="M9 16L14 21L23 11" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">NDMC 311</span>
+          <span class="brand-tag">Analytics Studio</span>
+        </div>
+      </div>
+
+      <div class="nav-links">
+        <a href="#uploadSection" class="nav-link">Upload</a>
+        <a href="#mapCard" class="nav-link">Configure</a>
+        <a href="#summaryCard" class="nav-link">Summary</a>
+        <a href="#dashPreviewCard" class="nav-link">Previews</a>
+      </div>
+
+      <div class="nav-status">
+        <span class="status-dot"></span>
+        <span class="status-text">Engine Ready</span>
+      </div>
+    </nav>
   </header>
 
-  <div class="wrap">
+  <!-- Main Content Wrap -->
+  <main class="wrap">
 
-    <div class="card">
-      <h2>Step 1 &middot; Upload raw complaint Excel</h2>
-      <label class="fileDrop" id="dropZone">
-        <input type="file" id="fileInput" accept=".xlsx,.xls">
-        <div class="icon">&#128193;</div>
-        <div>Drag and drop your file here, or click to browse.</div>
-        <div class="hint">.xlsx / .xls &middot; raw &ldquo;Complaint Sheet&rdquo; export</div>
-        <div class="name" id="fileName"></div>
-      </label>
-      <div class="msg" id="uploadMsg"></div>
-    </div>
-
-    <div class="card hidden" id="mapCard">
-      <h2>Step 2 &middot; Confirm columns &amp; report date</h2>
-      <table class="map-table" id="mapTable"></table>
-      <div class="row" style="margin-top:14px;">
-        <div class="field">
-          <label>Report Date (age is calculated against this date)</label>
-          <input type="date" id="reportDateInput">
+    <!-- Hero Section with Interactive 3D Canvas -->
+    <section class="hero-section">
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span class="badge-sparkle">✨</span>
+          <span>Next-Gen Civic Intelligence 3.0</span>
         </div>
-        <div class="field">
-          <label>Sheet</label>
-          <select id="sheetSelect"></select>
-        </div>
-        <button class="btn" id="generateBtn">Generate Report</button>
-      </div>
-      <div class="msg" id="mapMsg"></div>
-    </div>
-
-    <div class="card hidden" id="summaryCard">
-      <h2>Summary</h2>
-      <div class="stat-strip">
-        <div class="stat total">
-          <div class="num" id="sTotal">0</div>
-          <div class="lbl">TOTAL PENDING</div>
-        </div>
-        <div class="stat sla">
-          <div class="num" id="sSla">0</div>
-          <div class="lbl">WITHIN SLA</div>
-        </div>
-        <div class="stat esc">
-          <div class="num" id="sEsc">0</div>
-          <div class="lbl">ESCALATED</div>
+        <h1 class="hero-title">
+          NDMC 311 <span class="gradient-text">Complaint Pendency</span> &amp; SLA Generator
+        </h1>
+        <p class="hero-subtitle">
+          Transform raw municipal grievance exports into executive dashboards, SLA aging breakdowns, and officer-wise analytics with instant multi-page PDF and Pivot Excel exports.
+        </p>
+        <div class="hero-features">
+          <div class="feature-chip">
+            <span class="chip-icon">⚡</span>
+            <span>Automated 5-Stage Aging</span>
+          </div>
+          <div class="feature-chip">
+            <span class="chip-icon">📊</span>
+            <span>Executive Dashboard PDF</span>
+          </div>
+          <div class="feature-chip">
+            <span class="chip-icon">📑</span>
+            <span>Officer-Wise Pivot Excel</span>
+          </div>
         </div>
       </div>
-      <div class="checklist" id="checklist"></div>
-      <div class="btnrow">
-        <button class="btn" id="dashPdfBtn">Download Dashboard PDF</button>
-        <button class="btn" id="offPdfBtn">Download Officer-Wise PDF</button>
-        <button class="btn secondary" id="excelBtn">Download Excel (3 sheets)</button>
-        <button class="btn secondary" id="pivotExcelBtn">Download Officer Pending List (Excel)</button>
-      </div>
-      <div class="msg" id="genMsg"></div>
-    </div>
 
-    <div class="card hidden" id="dashPreviewCard">
-      <h2>Dashboard Preview</h2>
-      <div class="previewOuter">
-        <div id="dashboardRender"></div>
+      <div class="hero-3d-wrapper">
+        <div class="canvas-glow"></div>
+        <div id="hero3dContainer" class="hero-3d-container">
+          <canvas id="hero3dCanvas"></canvas>
+        </div>
+        <div class="hero-3d-hint">
+          <span class="hint-dot"></span>
+          <span>Interactive 3D Prism &middot; Move mouse to rotate</span>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="card hidden" id="offPreviewCard">
-      <h2>Officer-Wise Preview</h2>
-      <div class="previewOuter">
-        <div id="officerRender"></div>
+    <!-- Workflow Cards Container -->
+    <div class="workflow-container">
+
+      <!-- Step 1: Upload raw complaint Excel -->
+      <section class="card tilt-card" id="uploadSection">
+        <div class="card-header">
+          <div class="step-badge">01</div>
+          <div class="card-titles">
+            <h2>Upload Raw Complaint Excel</h2>
+            <p class="card-desc">Select or drop your standard NDMC raw complaint export (.xlsx or .xls)</p>
+          </div>
+        </div>
+
+        <label class="fileDrop" id="dropZone">
+          <input type="file" id="fileInput" accept=".xlsx,.xls">
+          <div class="fileDrop-inner">
+            <div class="drop-icon-box">
+              <div class="drop-icon-3d">
+                <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" class="cloud-icon">
+                  <path d="M14 36H34C38.4183 36 42 32.4183 42 28C42 23.8244 38.8021 20.3951 34.7214 20.0384C33.7229 13.1818 27.8447 8 20.7 8C12.8024 8 6.4 14.4024 6.4 22.3C6.4 23.3642 6.51694 24.4011 6.73887 25.3986C3.99264 26.6908 2 29.6106 2 33C2 37.4183 5.58172 41 10 41" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M24 22V36M24 22L19 27M24 22L29 27" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </div>
+            </div>
+            <div class="drop-primary-text">Drag &amp; drop your complaint Excel file here</div>
+            <div class="drop-secondary-text">or <span class="browse-highlight">browse from device</span> &middot; Supports .xlsx / .xls</div>
+            <div class="name" id="fileName"></div>
+          </div>
+        </label>
+        
+        <div class="msg" id="uploadMsg"></div>
+      </section>
+
+      <!-- Step 2: Confirm columns & report date -->
+      <section class="card tilt-card hidden" id="mapCard">
+        <div class="card-header">
+          <div class="step-badge">02</div>
+          <div class="card-titles">
+            <h2>Confirm Columns &amp; Report Date</h2>
+            <p class="card-desc">Review detected fields and configure the reference baseline date</p>
+          </div>
+        </div>
+
+        <div class="map-table-wrap">
+          <table class="map-table" id="mapTable"></table>
+        </div>
+
+        <div class="config-bar">
+          <div class="field">
+            <label for="reportDateInput">
+              <span class="label-icon">📅</span>
+              <span>Report As-Of Date (Age baseline)</span>
+            </label>
+            <input type="date" id="reportDateInput">
+          </div>
+          
+          <div class="field">
+            <label for="sheetSelect">
+              <span class="label-icon">📑</span>
+              <span>Target Sheet</span>
+            </label>
+            <select id="sheetSelect"></select>
+          </div>
+
+          <button class="btn btn-primary generate-action-btn" id="generateBtn">
+            <span class="btn-sparkle">⚡</span>
+            <span>Generate Intelligence Report</span>
+          </button>
+        </div>
+
+        <div class="msg" id="mapMsg"></div>
+      </section>
+
+      <!-- Step 3: Summary & Analytics Hub -->
+      <section class="card tilt-card hidden" id="summaryCard">
+        <div class="card-header">
+          <div class="step-badge">03</div>
+          <div class="card-titles">
+            <h2>Executive Pendency Summary</h2>
+            <p class="card-desc">Verified municipal metrics, aging distribution, and export pipelines</p>
+          </div>
+        </div>
+
+        <!-- 3D Stat Cards -->
+        <div class="stat-strip">
+          <div class="stat total 3d-stat">
+            <div class="stat-glass-shine"></div>
+            <div class="stat-icon-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="stat-svg">
+                <path d="M19 11H5M19 11C20.1046 11 21 11.8954 21 13V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V13C3 11.8954 3.89543 11 5 11M19 11V7C19 5.89543 18.1046 5 17 5H7C5.89543 5 5 5.89543 5 7V11" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <div class="num" id="sTotal">0</div>
+              <div class="lbl">TOTAL PENDING COMPLAINTS</div>
+            </div>
+          </div>
+
+          <div class="stat sla 3d-stat">
+            <div class="stat-glass-shine"></div>
+            <div class="stat-icon-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="stat-svg">
+                <path d="M9 12L11 14L15 10M12 3L4 7V12C4 17.5228 7.41804 22.5085 12 24C16.582 22.5085 20 17.5228 20 12V7L12 3Z" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <div class="num" id="sSla">0</div>
+              <div class="lbl">WITHIN SLA (COMPLIANT)</div>
+            </div>
+          </div>
+
+          <div class="stat esc 3d-stat">
+            <div class="stat-glass-shine"></div>
+            <div class="stat-icon-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="stat-svg">
+                <path d="M12 9V13M12 17H12.01M5.07183 19H18.9282C20.4678 19 21.4301 17.3333 20.6603 16L13.7321 4C12.9623 2.66667 11.0377 2.66667 10.2679 4L3.33975 16C2.56995 17.3333 3.53223 19 5.07183 19Z" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <div class="num" id="sEsc">0</div>
+              <div class="lbl">ESCALATED COMPLAINTS</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Verification Checklist Banner -->
+        <div class="checklist-box">
+          <div class="checklist-header">
+            <span class="chk-icon">🛡️</span>
+            <strong>Data Integrity &amp; SLA Consistency Verification</strong>
+          </div>
+          <div class="checklist" id="checklist"></div>
+        </div>
+
+        <!-- Export Hub Action Buttons -->
+        <div class="export-hub">
+          <div class="export-title">Export &amp; Download Deliverables</div>
+          <div class="btnrow">
+            <button class="btn btn-export btn-pdf" id="dashPdfBtn">
+              <span class="btn-icon">📄</span>
+              <span>Download Dashboard PDF</span>
+            </button>
+            <button class="btn btn-export btn-pdf" id="offPdfBtn">
+              <span class="btn-icon">📑</span>
+              <span>Download Officer-Wise PDF</span>
+            </button>
+            <button class="btn btn-export btn-excel" id="excelBtn">
+              <span class="btn-icon">📊</span>
+              <span>Download Excel (3 Sheets)</span>
+            </button>
+            <button class="btn btn-export btn-excel" id="pivotExcelBtn">
+              <span class="btn-icon">📋</span>
+              <span>Download Officer Pending List (Pivot Excel)</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="msg" id="genMsg"></div>
+      </section>
+
+      <!-- Dashboard Preview Card -->
+      <section class="card preview-card hidden" id="dashPreviewCard">
+        <div class="card-header preview-header">
+          <div class="preview-title-group">
+            <div class="preview-badge">Preview</div>
+            <h2>Management Dashboard View</h2>
+          </div>
+          <div class="preview-notice">Administrative layout &middot; High-Fidelity Printable Canvas</div>
+        </div>
+        <div class="previewOuter">
+          <div id="dashboardRender"></div>
+        </div>
+      </section>
+
+      <!-- Officer-Wise Preview Card -->
+      <section class="card preview-card hidden" id="offPreviewCard">
+        <div class="card-header preview-header">
+          <div class="preview-title-group">
+            <div class="preview-badge">Preview</div>
+            <h2>Officer-Wise Pendency View</h2>
+          </div>
+          <div class="preview-notice">Departmental breakdown &middot; High-Fidelity Printable Canvas</div>
+        </div>
+        <div class="previewOuter">
+          <div id="officerRender"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Modern Glass Footer -->
+  <footer class="modern-footer">
+    <div class="footer-wrap">
+      <div class="footer-brand">
+        <span class="footer-dot"></span>
+        <span>NDMC 311 Grievance Intelligence &amp; SLA Reporting System</span>
+      </div>
+      <div class="made-by">
+        Designed &amp; built by
+        <a href="https://deepanshushah.vercel.app" target="_blank" rel="noopener noreferrer" class="creator-badge">
+          <strong>Deepanshu Shah</strong>
+          <span class="creator-arrow">&rarr;</span>
+        </a>
       </div>
     </div>
-    <!-- <div class="update-banner">
-      🚀 New Update Coming Soon!
-    </div> -->
-  </div>
-  <footer class="made-by">
-    Designed & built by
-    <a href="https://deepanshushah.vercel.app" target="_blank" rel="noopener noreferrer">
-      <strong>𝕯𝖊𝖊𝖕𝖆𝖓𝖘𝖍𝖚 𝕾𝖍𝖆𝖍</strong>
-    </a>
   </footer>
-
 
   <script src="script.js"></script>
 </body>

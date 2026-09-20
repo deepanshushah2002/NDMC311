@@ -2,7 +2,7 @@ const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7,
 let workbook = null;
 let currentHeaders = [];
 let currentRows = [];
-let computed = null; // {deptList, offByDept, grand, reportDateStr}
+let computed = null; // {deptList, offByDept, grand, reportDateStr, reportDateObj, totalRows, unparsedDates, statusOrder, deptStatusAgg}
 
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -13,6 +13,8 @@ const mapTable = document.getElementById('mapTable');
 const sheetSelect = document.getElementById('sheetSelect');
 const reportDateInput = document.getElementById('reportDateInput');
 const mapMsg = document.getElementById('mapMsg');
+
+/* ---------------- File Drag & Drop ---------------- */
 
 dropZone.addEventListener('click', (e) => {
   if (e.target !== fileInput) {
@@ -27,34 +29,38 @@ dropZone.addEventListener('click', (e) => {
     dropZone.classList.add('has-file');
   });
 });
+
 ['dragleave', 'dragend'].forEach(evt => {
   dropZone.addEventListener(evt, e => {
     e.preventDefault(); e.stopPropagation();
     if (!fileInput.files.length) dropZone.classList.remove('has-file');
   });
 });
+
 dropZone.addEventListener('drop', e => {
   e.preventDefault(); e.stopPropagation();
   const dt = e.dataTransfer;
-  if (dt && dt.files && dt.files.length) { fileInput.files = dt.files; handleFile(dt.files[0]); }
+  if (dt && dt.files && dt.files.length) {
+    fileInput.files = dt.files;
+    handleFile(dt.files[0]);
+  }
 });
-// Safety net: stop the browser from navigating away to the raw file if a
-// drop ever lands outside the drop zone itself.
+
+// Safety net: stop browser from opening dropped files outside drop zone
 ['dragover', 'drop'].forEach(evt => {
   window.addEventListener(evt, e => { e.preventDefault(); }, false);
 });
-fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
 
-// Drag-and-drop of files between apps generally isn't supported on phone
-// browsers (Android/iOS) -- only desktop browsers support dragging a file
-// out of a file-manager window. Adjust the hint text on touch devices so
-// it doesn't promise something that won't work there.
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) handleFile(fileInput.files[0]);
+});
+
 if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
-  const hintLine = dropZone.querySelector('div:nth-of-type(2)');
-  if (hintLine) hintLine.textContent = 'Tap here to choose a file';
+  const hintLine = dropZone.querySelector('.drop-primary-text');
+  if (hintLine) hintLine.textContent = 'Tap here to select your complaint Excel';
 }
 
-// default report date = today
+// Default report date = today
 (function () {
   const t = new Date();
   reportDateInput.value = t.toISOString().slice(0, 10);
@@ -66,7 +72,7 @@ function showMsg(el, type, text) {
 }
 
 function handleFile(file) {
-  fileNameEl.textContent = file.name;
+  fileNameEl.textContent = '📁 ' + file.name;
   dropZone.classList.add('has-file');
   uploadMsg.className = 'msg';
   const reader = new FileReader();
@@ -80,12 +86,13 @@ function handleFile(file) {
         opt.value = name; opt.textContent = name;
         sheetSelect.appendChild(opt);
       });
-      // prefer a sheet that looks like the complaint data
+      // Prefer a sheet that looks like complaint data
       let preferred = workbook.SheetNames.find(n => /complaint/i.test(n)) || workbook.SheetNames[0];
       sheetSelect.value = preferred;
       loadSheet(preferred);
       mapCard.classList.remove('hidden');
-      showMsg(uploadMsg, 'ok', 'File loaded: ' + file.name);
+      showMsg(uploadMsg, 'ok', 'File loaded successfully: ' + file.name);
+      mapCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (err) {
       showMsg(uploadMsg, 'error', 'Could not read this file: ' + err.message);
     }
@@ -138,11 +145,9 @@ function buildMapTable() {
     mapSelections[f.key] = guess;
     const tr = document.createElement('tr');
     const td1 = document.createElement('td');
-    td1.style.fontWeight = '600'; td1.style.width = '260px'; td1.style.color = '#3a4a5c'; td1.style.fontSize = '13px';
     td1.textContent = f.label;
     const td2 = document.createElement('td');
     const sel = document.createElement('select');
-    sel.style.cssText = 'padding:7px 8px;border:1px solid #c6d0da;border-radius:6px;font-size:13px;min-width:260px;';
     currentHeaders.forEach(h => {
       const opt = document.createElement('option');
       opt.value = h; opt.textContent = h;
@@ -154,7 +159,7 @@ function buildMapTable() {
     tr.appendChild(td1); tr.appendChild(td2);
     mapTable.appendChild(tr);
   });
-  showMsg(mapMsg, 'info', 'Columns auto-detected. Adjust if wrong, then set report date and click Generate.');
+  showMsg(mapMsg, 'info', 'Columns auto-detected. Adjust if needed, verify report date, and click Generate.');
 }
 
 function parseDateVal(v) {
@@ -191,7 +196,6 @@ function bucketOf(days) {
   if (days <= 90) return 3;
   return 4;
 }
-const BUCKET_LABELS = ['0\u201315 Days', '16\u201330 Days', '31\u201345 Days', '46\u201390 Days', 'More than 90 Days'];
 
 function fmtDateDDMMMYYYY(d) {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -290,17 +294,18 @@ document.getElementById('generateBtn').addEventListener('click', () => {
 
 function renderSummary() {
   const g = computed.grand;
-  document.getElementById('sTotal').textContent = g.total;
-  document.getElementById('sSla').textContent = g.withinSla;
-  document.getElementById('sEsc').textContent = g.escalated;
+  document.getElementById('sTotal').textContent = g.total.toLocaleString();
+  document.getElementById('sSla').textContent = g.withinSla.toLocaleString();
+  document.getElementById('sEsc').textContent = g.escalated.toLocaleString();
   const bucketSum = g.buckets.reduce((a, b) => a + b, 0);
   const offTotalCheck = Object.values(computed.offByDept).flat().every(o => o.buckets.reduce((a, b) => a + b, 0) === o.total);
   const deptSumCheck = computed.deptList.every(d => d.withinSla + d.escalated === d.total);
+  
   let html = '';
-  html += `Total rows read: <b>${computed.totalRows}</b>` + (computed.unparsedDates ? ` &nbsp;(<span class="bad">${computed.unparsedDates} rows had an unreadable date &mdash; aged as 0 days</span>)` : '') + '<br>';
-  html += `Check &middot; Total Pending = Within SLA + Escalated: <span class="${deptSumCheck ? 'ok' : 'bad'}">${deptSumCheck ? 'PASS' : 'FAIL'}</span> &nbsp;&middot;&nbsp; `;
-  html += `Dashboard aging buckets total (${bucketSum}) = Overall Escalated (${g.escalated}): <span class="${bucketSum === g.escalated ? 'ok' : 'bad'}">${bucketSum === g.escalated ? 'PASS' : 'FAIL'}</span> &nbsp;&middot;&nbsp; `;
-  html += `Officer aging = Officer total (every officer): <span class="${offTotalCheck ? 'ok' : 'bad'}">${offTotalCheck ? 'PASS' : 'FAIL'}</span>`;
+  html += `Total records ingested: <b>${computed.totalRows}</b>` + (computed.unparsedDates ? ` &nbsp;(<span class="bad">${computed.unparsedDates} rows had an unreadable date &mdash; aged as 0 days</span>)` : '') + '<br>';
+  html += `Integrity Check &middot; Total Pending = Within SLA + Escalated: <span class="${deptSumCheck ? 'ok' : 'bad'}">${deptSumCheck ? 'PASS' : 'FAIL'}</span> &nbsp;&middot;&nbsp; `;
+  html += `Dashboard aging buckets (${bucketSum}) = Escalated (${g.escalated}): <span class="${bucketSum === g.escalated ? 'ok' : 'bad'}">${bucketSum === g.escalated ? 'PASS' : 'FAIL'}</span> &nbsp;&middot;&nbsp; `;
+  html += `Officer aging consistency: <span class="${offTotalCheck ? 'ok' : 'bad'}">${offTotalCheck ? 'PASS' : 'FAIL'}</span>`;
   document.getElementById('checklist').innerHTML = html;
 }
 
@@ -400,7 +405,7 @@ async function renderNodeToCanvas(node) {
   return await html2canvas(node, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
 }
 
-let _downloadsCap; // cached promise
+let _downloadsCap;
 function getDownloads() {
   if (!_downloadsCap) {
     _downloadsCap = (window.claude && typeof window.claude.use === 'function')
@@ -424,16 +429,12 @@ function downloadErrorText(err) {
   return (code && map[code]) || (err && err.message) || 'Could not save the file.';
 }
 
-// Saves a Blob under `filename`, using the artifact downloads capability
-// when this page is running as a published artifact, falling back to a
-// plain browser download link otherwise (e.g. inside the chat preview).
 async function saveBlob(filename, blob) {
   const downloads = await getDownloads();
   if (downloads) {
     await downloads.save({ filename, data: blob });
     return 'saved';
   }
-  // fallback: classic anchor download (works in the inline chat preview)
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
@@ -464,7 +465,7 @@ document.getElementById('dashPdfBtn').addEventListener('click', async () => {
     doc.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', x, y, w, h, undefined, 'MEDIUM');
     const blob = doc.output('blob');
     await saveBlob('NDMC_311_Dashboard_' + computed.reportDateStr + '.pdf', blob);
-    showMsg(genMsg, 'ok', 'Dashboard PDF ready.');
+    showMsg(genMsg, 'ok', 'Dashboard PDF generated and downloaded successfully.');
   } catch (err) {
     showMsg(genMsg, 'error', 'PDF: ' + downloadErrorText(err));
     console.error(err);
@@ -485,9 +486,6 @@ document.getElementById('offPdfBtn').addEventListener('click', async () => {
     const margin = 8;
     const maxW = pageW - margin * 2;
 
-    // Measure each segment's exact box (title + each department block) in
-    // CSS px BEFORE capturing, so slices line up perfectly with no
-    // accumulated rounding gaps between them.
     const container = document.getElementById('officerCanvasTarget');
     const containerRect = container.getBoundingClientRect();
     const segEls = [document.getElementById('officerTitleBlock'), ...document.querySelectorAll('[data-dept-block]')];
@@ -496,7 +494,6 @@ document.getElementById('offPdfBtn').addEventListener('click', async () => {
       return { top: r.top - containerRect.top, height: r.height };
     });
 
-    // One single capture of the whole content, then slice it per segment.
     const fullCanvas = await renderNodeToCanvas(container);
     const scaleFactor = fullCanvas.width / containerRect.width;
     const mmPerPx = maxW / fullCanvas.width;
@@ -524,7 +521,7 @@ document.getElementById('offPdfBtn').addEventListener('click', async () => {
     });
     const blob = doc.output('blob');
     await saveBlob('NDMC_311_OfficerWise_' + computed.reportDateStr + '.pdf', blob);
-    showMsg(genMsg, 'ok', 'Officer-Wise PDF ready.');
+    showMsg(genMsg, 'ok', 'Officer-Wise PDF generated and downloaded successfully.');
   } catch (err) {
     showMsg(genMsg, 'error', 'PDF: ' + downloadErrorText(err));
     console.error(err);
@@ -540,7 +537,7 @@ document.getElementById('excelBtn').addEventListener('click', async () => {
   try {
     const blob = await buildStyledExcelBlob();
     await saveBlob('NDMC_311_Report_' + computed.reportDateStr + '.xlsx', blob);
-    showMsg(genMsg, 'ok', 'Excel file ready.');
+    showMsg(genMsg, 'ok', 'Excel report ready for download.');
   } catch (err) {
     showMsg(genMsg, 'error', 'Excel: ' + downloadErrorText(err));
     console.error(err);
@@ -549,9 +546,6 @@ document.getElementById('excelBtn').addEventListener('click', async () => {
   }
 });
 
-// Builds the 3-sheet workbook with the same navy/light-blue/green/red
-// colour scheme as the Dashboard & Officer-Wise report, using ExcelJS
-// (the plain XLSX writer used elsewhere in this file has no styling API).
 async function buildStyledExcelBlob() {
   const { deptList, offByDept, grand, reportDateStr } = computed;
   const wb = new ExcelJS.Workbook();
@@ -568,7 +562,7 @@ async function buildStyledExcelBlob() {
   function border(cell) { cell.border = BORDER_ALL; }
   function centre(cell, wrap) { cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: !!wrap }; }
 
-  /* ---------------- Dashboard sheet ---------------- */
+  /* Dashboard sheet */
   const dash = wb.addWorksheet('Dashboard');
   dash.columns = [
     { width: 30 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 12 }
@@ -635,7 +629,7 @@ async function buildStyledExcelBlob() {
     c.value = v; c.font = WHITE_BOLD; centre(c); fill(c, NAVY); border(c);
   });
 
-  /* ---------------- Officers Wise sheet ---------------- */
+  /* Officers Wise sheet */
   const off = wb.addWorksheet('Officers Wise');
   off.columns = [{ width: 7 }, { width: 36 }, { width: 13 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 14 }];
 
@@ -678,10 +672,10 @@ async function buildStyledExcelBlob() {
       const c = off.getCell(orow, i + 3);
       c.value = v; c.font = WHITE_BOLD; centre(c); fill(c, NAVY); border(c);
     });
-    orow += 2; // blank spacer row before next department
+    orow += 2;
   });
 
-  /* ---------------- Source Data sheet (raw, unchanged) ---------------- */
+  /* Source Data sheet */
   const src = wb.addWorksheet('Source Data');
   if (currentRows.length) {
     const cols = Object.keys(currentRows[0]);
@@ -699,13 +693,7 @@ async function buildStyledExcelBlob() {
   return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
-/* ---------------- Officer Pending List (pivot-style) Excel ---------------- */
-// Matches the layout of the reference "OFFICER WISE PENDING LIST AS ON
-// DATED ..." pivot export: Department / Currently Assigned To / Assigned
-// To Mobile / Count of Complaint Number, with an "<Officer> Total" row
-// under every officer, a "<Department> Total" row under every department
-// (both alphabetically sorted, as a plain PivotTable would list them),
-// and a Grand Total row at the end.
+/* Officer Pending List (pivot-style) Excel */
 function fmtDateTitleUpper(d) {
   const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
   return d.getDate() + ' ' + months[d.getMonth()] + ', ' + d.getFullYear();
@@ -731,26 +719,24 @@ async function buildOfficerPivotExcelBlob() {
   const { deptList, offByDept, grand, statusOrder, deptStatusAgg } = computed;
   const wb = new ExcelJS.Workbook();
 
-  // Exact colours from the reference screenshots.
-  const YELLOW = 'FFFFFF00';       // title band on Sheet2, header + Grand Total band on Sheet1
-  const TITLE_GREEN = 'FF93C47D';  // title band on Sheet1
-  const HEADER_GREEN = 'FF6AA84F'; // header band on Sheet2
-  const DEPT_PINK = 'FFEAD1DC';    // department-name cell on Sheet2
+  const YELLOW = 'FFFFFF00';
+  const TITLE_GREEN = 'FF93C47D';
+  const HEADER_GREEN = 'FF6AA84F';
+  const DEPT_PINK = 'FFEAD1DC';
   const BLACK_BOLD = { bold: true, color: { argb: 'FF000000' } };
   const THIN = { style: 'thin', color: { argb: 'FF808080' } };
   const BORDER_ALL = { top: THIN, left: THIN, bottom: THIN, right: THIN };
   function fill(cell, argb) { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } }; }
   function border(cell) { cell.border = BORDER_ALL; }
 
-  // Alphabetical order, like a default PivotTable row-label sort.
   const alphaDepts = [...deptList].sort((a, b) => a.name.localeCompare(b.name));
 
-  /* ============ Sheet1: Department x Current Status pivot ============ */
+  /* Sheet1: Department x Current Status pivot */
   const s1 = wb.addWorksheet('Sheet1');
   const statusCols = statusOrder && statusOrder.length ? statusOrder : [];
   s1.columns = [{ width: 7 }, { width: 34 }, ...statusCols.map(() => ({ width: 20 })), { width: 14 }];
 
-  const s1LastCol = 2 + statusCols.length + 1; // S.No + Department + statuses + Grand Total
+  const s1LastCol = 2 + statusCols.length + 1;
   s1.mergeCells(1, 1, 1, s1LastCol);
   const s1Title = s1.getCell(1, 1);
   s1Title.value = 'Pending Complaints On NDMC 311 APP As On DATED ' + fmtDateTitleUpper(computed.reportDateObj);
@@ -789,7 +775,7 @@ async function buildOfficerPivotExcelBlob() {
   });
   const gLast = s1.getCell(sr, s1LastCol); gLast.value = grand.total; gLast.font = BLACK_BOLD; gLast.alignment = { horizontal: 'center' }; fill(gLast, YELLOW); border(gLast);
 
-  /* ============ Sheet2: Officer-wise pending list pivot ============ */
+  /* Sheet2: Officer-wise pending list pivot */
   const s2 = wb.addWorksheet('Sheet2');
   s2.columns = [{ width: 34 }, { width: 42 }, { width: 16 }, { width: 22 }];
 
@@ -812,21 +798,18 @@ async function buildOfficerPivotExcelBlob() {
     const officers = [...(offByDept[d.name] || [])].sort((a, b) => a.officer.localeCompare(b.officer));
     const deptStartRow = r;
     officers.forEach(o => {
-      // officer detail row (no separate "<Officer> Total" row -- one row per officer only)
       const c0 = s2.getCell(r, 1); c0.value = ''; border(c0);
       const c1 = s2.getCell(r, 2); c1.value = o.officer; c1.font = BLACK_BOLD; border(c1);
       const c2 = s2.getCell(r, 3); c2.value = o.mobile || ''; c2.font = BLACK_BOLD; c2.alignment = { horizontal: 'center' }; border(c2);
       const c3 = s2.getCell(r, 4); c3.value = o.total; c3.font = BLACK_BOLD; c3.alignment = { horizontal: 'center' }; border(c3);
       r++;
     });
-    // department name goes on the first row of its block, pink like the reference
     const deptCell = s2.getCell(deptStartRow, 1);
     deptCell.value = d.name;
     deptCell.font = BLACK_BOLD;
     fill(deptCell, DEPT_PINK);
     border(deptCell);
 
-    // department total row
     const dt0 = s2.getCell(r, 1); dt0.value = d.name + ' Total'; dt0.font = BLACK_BOLD; fill(dt0, YELLOW); border(dt0);
     const dt1 = s2.getCell(r, 2); dt1.value = ''; fill(dt1, YELLOW); border(dt1);
     const dt2 = s2.getCell(r, 3); dt2.value = ''; fill(dt2, YELLOW); border(dt2);
@@ -842,3 +825,233 @@ async function buildOfficerPivotExcelBlob() {
   const buffer = await wb.xlsx.writeBuffer();
   return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
+
+/* ==========================================================================
+   Interactive 3D Hero Scene (Three.js)
+   ========================================================================== */
+
+function initHero3D() {
+  const container = document.getElementById('hero3dContainer');
+  const canvas = document.getElementById('hero3dCanvas');
+  if (!container || !canvas || typeof THREE === 'undefined') return;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+  camera.position.z = 6;
+
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  // Lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+  scene.add(ambientLight);
+
+  const dirLight1 = new THREE.DirectionalLight(0x6366f1, 1.2);
+  dirLight1.position.set(4, 5, 4);
+  scene.add(dirLight1);
+
+  const dirLight2 = new THREE.DirectionalLight(0x06b6d4, 1.0);
+  dirLight2.position.set(-4, -3, 2);
+  scene.add(dirLight2);
+
+  const pointLight = new THREE.PointLight(0xf43f5e, 0.8, 10);
+  pointLight.position.set(0, 2, 3);
+  scene.add(pointLight);
+
+  // Group for full 3D object
+  const heroGroup = new THREE.Group();
+  scene.add(heroGroup);
+
+  // Central Crystal Icosahedron
+  const icoGeo = new THREE.IcosahedronGeometry(1.6, 0);
+  const icoMat = new THREE.MeshPhysicalMaterial({
+    color: 0xffffff,
+    emissive: 0x3b82f6,
+    emissiveIntensity: 0.15,
+    roughness: 0.1,
+    metalness: 0.1,
+    transmission: 0.7,
+    ior: 1.5,
+    thickness: 1.5,
+    transparent: true,
+    opacity: 0.92,
+    wireframe: false
+  });
+  const icoMesh = new THREE.Mesh(icoGeo, icoMat);
+  heroGroup.add(icoMesh);
+
+  // Wireframe Cage overlay
+  const wireMat = new THREE.MeshBasicMaterial({
+    color: 0x6366f1,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.35
+  });
+  const wireMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1.62, 0), wireMat);
+  heroGroup.add(wireMesh);
+
+  // Orbital Rings
+  const ringGeo1 = new THREE.TorusGeometry(2.3, 0.035, 16, 100);
+  const ringMat1 = new THREE.MeshStandardMaterial({
+    color: 0x6366f1,
+    roughness: 0.2,
+    metalness: 0.85,
+    emissive: 0x3b82f6,
+    emissiveIntensity: 0.2
+  });
+  const ring1 = new THREE.Mesh(ringGeo1, ringMat1);
+  ring1.rotation.x = Math.PI / 3;
+  heroGroup.add(ring1);
+
+  const ringGeo2 = new THREE.TorusGeometry(2.6, 0.025, 16, 100);
+  const ringMat2 = new THREE.MeshStandardMaterial({
+    color: 0x06b6d4,
+    roughness: 0.2,
+    metalness: 0.85,
+    emissive: 0x06b6d4,
+    emissiveIntensity: 0.2
+  });
+  const ring2 = new THREE.Mesh(ringGeo2, ringMat2);
+  ring2.rotation.y = Math.PI / 4;
+  ring2.rotation.x = -Math.PI / 6;
+  heroGroup.add(ring2);
+
+  // Floating particles / data nodes
+  const particleCount = 45;
+  const particleGeo = new THREE.SphereGeometry(0.05, 8, 8);
+  const particleMat = new THREE.MeshStandardMaterial({
+    color: 0x8b5cf6,
+    roughness: 0.3,
+    metalness: 0.7,
+    emissive: 0x6366f1,
+    emissiveIntensity: 0.5
+  });
+  
+  const particles = [];
+  for (let i = 0; i < particleCount; i++) {
+    const pMesh = new THREE.Mesh(particleGeo, particleMat);
+    const radius = 2.0 + Math.random() * 1.5;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(Math.random() * 2 - 1);
+    
+    pMesh.position.x = radius * Math.sin(phi) * Math.cos(theta);
+    pMesh.position.y = radius * Math.sin(phi) * Math.sin(theta);
+    pMesh.position.z = radius * Math.cos(phi);
+    
+    pMesh.userData = {
+      basePos: pMesh.position.clone(),
+      speed: 0.005 + Math.random() * 0.015,
+      offset: Math.random() * Math.PI * 2
+    };
+    heroGroup.add(pMesh);
+    particles.push(pMesh);
+  }
+
+  // Interactive Mouse Parallax
+  let targetRotX = 0;
+  let targetRotY = 0;
+  let mouseX = 0;
+  let mouseY = 0;
+
+  function onMouseMove(e) {
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+    mouseX = (x / (rect.width / 2));
+    mouseY = (y / (rect.height / 2));
+    targetRotY = mouseX * 0.8;
+    targetRotX = mouseY * 0.8;
+  }
+
+  container.addEventListener('mousemove', onMouseMove);
+  container.addEventListener('mouseleave', () => {
+    targetRotX = 0;
+    targetRotY = 0;
+  });
+
+  // Touch Support
+  container.addEventListener('touchmove', (e) => {
+    if (e.touches.length > 0) {
+      const rect = container.getBoundingClientRect();
+      const x = e.touches[0].clientX - rect.left - rect.width / 2;
+      const y = e.touches[0].clientY - rect.top - rect.height / 2;
+      targetRotY = (x / (rect.width / 2)) * 0.8;
+      targetRotX = (y / (rect.height / 2)) * 0.8;
+    }
+  }, { passive: true });
+
+  // Render loop
+  let clock = new THREE.Clock();
+  let animId;
+
+  function animate() {
+    animId = requestAnimationFrame(animate);
+    const elapsedTime = clock.getElapsedTime();
+
+    // Constant smooth floating & self-rotation
+    heroGroup.position.y = Math.sin(elapsedTime * 1.2) * 0.12;
+    icoMesh.rotation.y += 0.006;
+    icoMesh.rotation.x += 0.004;
+    wireMesh.rotation.y += 0.006;
+    wireMesh.rotation.x += 0.004;
+
+    ring1.rotation.z += 0.008;
+    ring2.rotation.z -= 0.006;
+
+    // Orbit particles
+    particles.forEach(p => {
+      p.position.y = p.userData.basePos.y + Math.sin(elapsedTime * 2 + p.userData.offset) * 0.15;
+      p.rotation.y += p.userData.speed;
+    });
+
+    // Mouse Damping Interpolation
+    heroGroup.rotation.y += (targetRotY - heroGroup.rotation.y) * 0.05;
+    heroGroup.rotation.x += (targetRotX - heroGroup.rotation.x) * 0.05;
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // Resize Handler
+  function handleResize() {
+    if (!container) return;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
+  }
+  window.addEventListener('resize', handleResize);
+}
+
+/* ==========================================================================
+   3D Card Tilt Micro-Interactions
+   ========================================================================== */
+
+function init3DTilt() {
+  const cards = document.querySelectorAll('.tilt-card');
+  cards.forEach(card => {
+    card.addEventListener('mousemove', e => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const rotateX = ((y - centerY) / centerY) * -3.5;
+      const rotateY = ((x - centerX) / centerX) * 3.5;
+
+      card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-2px)`;
+    });
+
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0px)';
+    });
+  });
+}
+
+// Initialize on DOM Ready
+document.addEventListener('DOMContentLoaded', () => {
+  initHero3D();
+  init3DTilt();
+});
