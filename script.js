@@ -14,13 +14,6 @@ const sheetSelect = document.getElementById('sheetSelect');
 const reportDateInput = document.getElementById('reportDateInput');
 const mapMsg = document.getElementById('mapMsg');
 
-// Some browsers (notably iOS Safari / many mobile browsers) open the
-// picker via the label's native click-forwarding to the nested <input>
-// already. Also calling fileInput.click() ourselves on top of that can
-// fire the dialog twice and make it look like clicking "does nothing" on
-// some devices, so we only add our own click-forward when the click did
-// NOT originate on the input itself (covers clicks that land on the
-// label's padding/icon/text, without double-triggering the native path).
 dropZone.addEventListener('click', (e) => {
   if (e.target !== fileInput) {
     e.preventDefault();
@@ -133,6 +126,8 @@ const FIELD_DEFS = [
   { key: 'dept', label: 'Department column', candidates: ['Department'] },
   { key: 'officer', label: 'Currently Assigned To (Officer) column', candidates: ['Currently Assigned To'] },
   { key: 'esc', label: 'Is Escalated column', candidates: ['Is Escalated'] },
+  { key: 'mobile', label: 'Assigned To Mobile column (for pivot list export)', candidates: ['Assigned To Mobile', 'Mobile'] },
+  { key: 'status', label: 'Current Status column (for status-wise pivot export)', candidates: ['Current Satus', 'Current Status', 'Status'] },
 ];
 let mapSelections = {};
 
@@ -211,10 +206,13 @@ document.getElementById('generateBtn').addEventListener('click', () => {
     const reportDateStr = fmtDateDDMMMYYYY(reportDate);
 
     const colDate = mapSelections.date, colDept = mapSelections.dept,
-      colOfficer = mapSelections.officer, colEsc = mapSelections.esc;
+      colOfficer = mapSelections.officer, colEsc = mapSelections.esc,
+      colMobile = mapSelections.mobile, colStatus = mapSelections.status;
 
     const deptAgg = {}; // dept -> {total,escalated,buckets[5]}
-    const offAgg = {};  // dept||officer -> {dept,officer,total,buckets[5]}
+    const offAgg = {};  // dept||officer -> {dept,officer,total,buckets[5],mobile}
+    const statusOrder = []; // first-seen order of distinct status values
+    const deptStatusAgg = {}; // dept -> {status: count}
     let totalRows = 0, unparsedDates = 0;
 
     currentRows.forEach(r => {
@@ -222,6 +220,10 @@ document.getElementById('generateBtn').addEventListener('click', () => {
       if (dept === '') dept = 'Unspecified Department';
       let officer = (r[colOfficer] === undefined || r[colOfficer] === null) ? '' : r[colOfficer].toString().trim();
       if (officer === '' || officer === '-') officer = 'Unassigned';
+      let mobile = (colMobile && r[colMobile] !== undefined && r[colMobile] !== null) ? r[colMobile].toString().trim() : '';
+      if (mobile === '-') mobile = '';
+      let status = (colStatus && r[colStatus] !== undefined && r[colStatus] !== null) ? r[colStatus].toString().trim() : '';
+      if (status === '') status = 'Unspecified';
       const escRaw = (r[colEsc] === undefined || r[colEsc] === null) ? '' : r[colEsc].toString().trim().toLowerCase();
       const isEsc = (escRaw === 'yes' || escRaw === 'y' || escRaw === 'true' || escRaw === '1');
       const dateVal = parseDateVal(r[colDate]);
@@ -238,9 +240,14 @@ document.getElementById('generateBtn').addEventListener('click', () => {
       if (isEsc) { deptAgg[dept].escalated++; deptAgg[dept].buckets[b]++; }
 
       const key = dept + '||' + officer;
-      if (!offAgg[key]) offAgg[key] = { dept, officer, total: 0, buckets: [0, 0, 0, 0, 0] };
+      if (!offAgg[key]) offAgg[key] = { dept, officer, total: 0, buckets: [0, 0, 0, 0, 0], mobile: '' };
       offAgg[key].total++;
       offAgg[key].buckets[b]++;
+      if (!offAgg[key].mobile && mobile) offAgg[key].mobile = mobile;
+
+      if (!statusOrder.includes(status)) statusOrder.push(status);
+      if (!deptStatusAgg[dept]) deptStatusAgg[dept] = {};
+      deptStatusAgg[dept][status] = (deptStatusAgg[dept][status] || 0) + 1;
     });
 
     // department list sorted desc by total pending
@@ -266,7 +273,7 @@ document.getElementById('generateBtn').addEventListener('click', () => {
       return acc;
     }, { total: 0, escalated: 0, withinSla: 0, buckets: [0, 0, 0, 0, 0] });
 
-    computed = { deptList, offByDept, grand, reportDateStr, totalRows, unparsedDates };
+    computed = { deptList, offByDept, grand, reportDateStr, reportDateObj: reportDate, totalRows, unparsedDates, statusOrder: statusOrder.sort((a, b) => a.localeCompare(b)), deptStatusAgg };
 
     renderSummary();
     renderDashboard();
@@ -687,6 +694,150 @@ async function buildStyledExcelBlob() {
       cols.forEach((h, i) => { excelRow.getCell(i + 1).value = row[h]; });
     });
   }
+
+  const buffer = await wb.xlsx.writeBuffer();
+  return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+/* ---------------- Officer Pending List (pivot-style) Excel ---------------- */
+// Matches the layout of the reference "OFFICER WISE PENDING LIST AS ON
+// DATED ..." pivot export: Department / Currently Assigned To / Assigned
+// To Mobile / Count of Complaint Number, with an "<Officer> Total" row
+// under every officer, a "<Department> Total" row under every department
+// (both alphabetically sorted, as a plain PivotTable would list them),
+// and a Grand Total row at the end.
+function fmtDateTitleUpper(d) {
+  const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+  return d.getDate() + ' ' + months[d.getMonth()] + ', ' + d.getFullYear();
+}
+
+document.getElementById('pivotExcelBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('pivotExcelBtn');
+  const genMsg = document.getElementById('genMsg');
+  btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>Building Excel...';
+  try {
+    const blob = await buildOfficerPivotExcelBlob();
+    await saveBlob('Officer_Wise_Pending_List_' + computed.reportDateStr + '.xlsx', blob);
+    showMsg(genMsg, 'ok', 'Officer Pending List Excel ready.');
+  } catch (err) {
+    showMsg(genMsg, 'error', 'Excel: ' + downloadErrorText(err));
+    console.error(err);
+  } finally {
+    btn.disabled = false; btn.innerHTML = orig;
+  }
+});
+
+async function buildOfficerPivotExcelBlob() {
+  const { deptList, offByDept, grand, statusOrder, deptStatusAgg } = computed;
+  const wb = new ExcelJS.Workbook();
+
+  // Exact colours from the reference screenshots.
+  const YELLOW = 'FFFFFF00';       // title band on Sheet2, header + Grand Total band on Sheet1
+  const TITLE_GREEN = 'FF93C47D';  // title band on Sheet1
+  const HEADER_GREEN = 'FF6AA84F'; // header band on Sheet2
+  const DEPT_PINK = 'FFEAD1DC';    // department-name cell on Sheet2
+  const BLACK_BOLD = { bold: true, color: { argb: 'FF000000' } };
+  const THIN = { style: 'thin', color: { argb: 'FF808080' } };
+  const BORDER_ALL = { top: THIN, left: THIN, bottom: THIN, right: THIN };
+  function fill(cell, argb) { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } }; }
+  function border(cell) { cell.border = BORDER_ALL; }
+
+  // Alphabetical order, like a default PivotTable row-label sort.
+  const alphaDepts = [...deptList].sort((a, b) => a.name.localeCompare(b.name));
+
+  /* ============ Sheet1: Department x Current Status pivot ============ */
+  const s1 = wb.addWorksheet('Sheet1');
+  const statusCols = statusOrder && statusOrder.length ? statusOrder : [];
+  s1.columns = [{ width: 7 }, { width: 34 }, ...statusCols.map(() => ({ width: 20 })), { width: 14 }];
+
+  const s1LastCol = 2 + statusCols.length + 1; // S.No + Department + statuses + Grand Total
+  s1.mergeCells(1, 1, 1, s1LastCol);
+  const s1Title = s1.getCell(1, 1);
+  s1Title.value = 'Pending Complaints On NDMC 311 APP As On DATED ' + fmtDateTitleUpper(computed.reportDateObj);
+  s1Title.font = { ...BLACK_BOLD, size: 13 };
+  fill(s1Title, TITLE_GREEN);
+  s1.getRow(1).height = 22;
+
+  const s1HeadRow = 2;
+  ['S.NO.', 'Department', ...statusCols, 'Grand Total'].forEach((h, i) => {
+    const c = s1.getCell(s1HeadRow, i + 1);
+    c.value = h; c.font = BLACK_BOLD; fill(c, YELLOW); border(c);
+    c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  });
+
+  let sr = s1HeadRow + 1;
+  const statusTotals = statusCols.map(() => 0);
+  alphaDepts.forEach((d, idx) => {
+    const c0 = s1.getCell(sr, 1); c0.value = idx + 1; c0.font = BLACK_BOLD; c0.alignment = { horizontal: 'center' }; border(c0);
+    const c1 = s1.getCell(sr, 2); c1.value = d.name; c1.font = BLACK_BOLD; border(c1);
+    const counts = deptStatusAgg[d.name] || {};
+    statusCols.forEach((st, i) => {
+      const v = counts[st] || 0;
+      const c = s1.getCell(sr, 3 + i);
+      c.value = v > 0 ? v : ''; c.font = BLACK_BOLD; c.alignment = { horizontal: 'center' }; border(c);
+      statusTotals[i] += v;
+    });
+    const cg = s1.getCell(sr, s1LastCol); cg.value = d.total; cg.font = BLACK_BOLD; cg.alignment = { horizontal: 'center' }; border(cg);
+    sr++;
+  });
+  // Grand Total row
+  const g0 = s1.getCell(sr, 1); g0.value = ''; fill(g0, YELLOW); border(g0);
+  const g1 = s1.getCell(sr, 2); g1.value = 'Grand Total'; g1.font = BLACK_BOLD; fill(g1, YELLOW); border(g1);
+  statusCols.forEach((st, i) => {
+    const c = s1.getCell(sr, 3 + i);
+    c.value = statusTotals[i] > 0 ? statusTotals[i] : ''; c.font = BLACK_BOLD; c.alignment = { horizontal: 'center' }; fill(c, YELLOW); border(c);
+  });
+  const gLast = s1.getCell(sr, s1LastCol); gLast.value = grand.total; gLast.font = BLACK_BOLD; gLast.alignment = { horizontal: 'center' }; fill(gLast, YELLOW); border(gLast);
+
+  /* ============ Sheet2: Officer-wise pending list pivot ============ */
+  const s2 = wb.addWorksheet('Sheet2');
+  s2.columns = [{ width: 34 }, { width: 42 }, { width: 16 }, { width: 22 }];
+
+  s2.mergeCells('A1:D1');
+  const s2Title = s2.getCell('A1');
+  s2Title.value = 'OFFICER WISE PENDING LIST AS ON DATED ' + fmtDateTitleUpper(computed.reportDateObj);
+  s2Title.font = { ...BLACK_BOLD, size: 13 };
+  fill(s2Title, YELLOW);
+  s2.getRow(1).height = 22;
+
+  const headRow = 2;
+  ['Department', 'Currently Assigned To', 'Assigned To Mobile', 'Count of Complaint Number'].forEach((h, i) => {
+    const c = s2.getCell(headRow, i + 1);
+    c.value = h; c.font = BLACK_BOLD; fill(c, HEADER_GREEN); border(c);
+    c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  });
+
+  let r = headRow + 1;
+  alphaDepts.forEach(d => {
+    const officers = [...(offByDept[d.name] || [])].sort((a, b) => a.officer.localeCompare(b.officer));
+    const deptStartRow = r;
+    officers.forEach(o => {
+      // officer detail row (no separate "<Officer> Total" row -- one row per officer only)
+      const c0 = s2.getCell(r, 1); c0.value = ''; border(c0);
+      const c1 = s2.getCell(r, 2); c1.value = o.officer; c1.font = BLACK_BOLD; border(c1);
+      const c2 = s2.getCell(r, 3); c2.value = o.mobile || ''; c2.font = BLACK_BOLD; c2.alignment = { horizontal: 'center' }; border(c2);
+      const c3 = s2.getCell(r, 4); c3.value = o.total; c3.font = BLACK_BOLD; c3.alignment = { horizontal: 'center' }; border(c3);
+      r++;
+    });
+    // department name goes on the first row of its block, pink like the reference
+    const deptCell = s2.getCell(deptStartRow, 1);
+    deptCell.value = d.name;
+    deptCell.font = BLACK_BOLD;
+    fill(deptCell, DEPT_PINK);
+    border(deptCell);
+
+    // department total row
+    const dt0 = s2.getCell(r, 1); dt0.value = d.name + ' Total'; dt0.font = BLACK_BOLD; fill(dt0, YELLOW); border(dt0);
+    const dt1 = s2.getCell(r, 2); dt1.value = ''; fill(dt1, YELLOW); border(dt1);
+    const dt2 = s2.getCell(r, 3); dt2.value = ''; fill(dt2, YELLOW); border(dt2);
+    const dt3 = s2.getCell(r, 4); dt3.value = d.total; dt3.font = BLACK_BOLD; dt3.alignment = { horizontal: 'center' }; fill(dt3, YELLOW); border(dt3);
+    r++;
+  });
+
+  const gt0 = s2.getCell(r, 1); gt0.value = 'Grand Total'; gt0.font = { ...BLACK_BOLD, size: 12 }; fill(gt0, YELLOW); border(gt0);
+  const gt1 = s2.getCell(r, 2); gt1.value = ''; fill(gt1, YELLOW); border(gt1);
+  const gt2 = s2.getCell(r, 3); gt2.value = ''; fill(gt2, YELLOW); border(gt2);
+  const gt3 = s2.getCell(r, 4); gt3.value = grand.total; gt3.font = { ...BLACK_BOLD, size: 12 }; gt3.alignment = { horizontal: 'center' }; fill(gt3, YELLOW); border(gt3);
 
   const buffer = await wb.xlsx.writeBuffer();
   return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

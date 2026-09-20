@@ -21,8 +21,22 @@
     background: var(--paper);
     color: var(--ink);
   }
+.made-by {
+  text-align: right;
+  padding: 20px 25px;
+  font-size: 12px;
+  color: #777;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
 
-   .update-banner {
+.made-by strong {
+  color: #333;
+  font-weight: 600;
+}
+
+
+  .update-banner {
     background: #2563eb;
     color: white;
     padding: 12px 20px;
@@ -32,15 +46,6 @@
     border-radius: 8px;
     margin: 20px;
   }
-
-  .made-by {
-    text-align: right;
-    padding: 20px 25px;
-    font-size: 10px;
-    color: #666;
-    font-weight: 500;
-  }
-
   header {
     background: linear-gradient(135deg, var(--navy-dark), var(--navy));
     color: #fff;
