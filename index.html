@@ -23,6 +23,11 @@
 </head>
 
 <body>
+  <!-- Interactive Cursor Light & Glow Elements -->
+  <div class="cursor-spotlight" id="cursorSpotlight" aria-hidden="true"></div>
+  <div class="cursor-glow" id="cursorGlow" aria-hidden="true"></div>
+  <div class="cursor-dot" id="cursorDot" aria-hidden="true"></div>
+
   <!-- Ambient 3D background elements -->
   <div class="bg-scene" aria-hidden="true">
     <div class="bg-orb orb-1"></div>
@@ -61,9 +66,16 @@
         <a href="#dashPreviewCard" class="nav-link">Previews</a>
       </div>
 
-      <div class="nav-status">
-        <span class="status-dot"></span>
-        <span class="status-text">Engine Ready</span>
+      <div class="nav-actions">
+        <button class="theme-toggle-btn" id="themeToggleBtn" title="Toggle Dark/Light Mode" aria-label="Toggle Theme">
+          <span class="theme-icon sun-icon">☀️</span>
+          <span class="theme-icon moon-icon">🌙</span>
+        </button>
+
+        <div class="nav-status">
+          <span class="status-dot"></span>
+          <span class="status-text">Engine Ready</span>
+        </div>
       </div>
     </nav>
   </header>
@@ -84,6 +96,7 @@
         <p class="hero-subtitle">
           Transform raw municipal grievance exports into executive dashboards, Report aging breakdowns, and officer-wise analytics with instant multi-page PDF and Pivot Excel exports.
         </p>
+        
         <div class="hero-features">
           <div class="feature-chip">
             <span class="chip-icon">⚡</span>
@@ -107,7 +120,7 @@
         </div>
         <div class="hero-3d-hint">
           <span class="hint-dot"></span>
-          <span>Interactive 3D Prism &middot; Move mouse to rotate</span>
+          <span>Interactive 3D Prism &middot; Move mouse to rotate &amp; illuminate</span>
         </div>
       </div>
     </section>
@@ -237,6 +250,24 @@
           </div>
         </div>
 
+        <!-- SLA Performance Visual Gauge Bar -->
+        <div class="sla-gauge-card">
+          <div class="sla-gauge-header">
+            <div class="sla-gauge-title">
+              <span class="sla-icon">⚡</span>
+              <span>Municipal SLA Compliance Health</span>
+            </div>
+            <div class="sla-rate-badge" id="slaRateBadge">0.0% Compliant</div>
+          </div>
+          <div class="sla-progress-track">
+            <div class="sla-progress-fill" id="slaProgressBar" style="width: 0%"></div>
+          </div>
+          <div class="sla-legend">
+            <span class="legend-item"><span class="legend-dot dot-green"></span> Within SLA: <b id="sSlaPct">0%</b></span>
+            <span class="legend-item"><span class="legend-dot dot-red"></span> Escalated / Overdue: <b id="sEscPct">0%</b></span>
+          </div>
+        </div>
+
         <!-- Verification Checklist Banner -->
         <div class="checklist-box">
           <div class="checklist-header">
@@ -266,6 +297,10 @@
               <span class="btn-icon">📋</span>
               <span>Download Officer Pending List (Pivot Excel)</span>
             </button>
+            <!-- <button class="btn btn-export btn-copy" id="copySummaryBtn">
+              <span class="btn-icon">📝</span>
+              <span>Copy Executive Brief</span>
+            </button> -->
           </div>
         </div>
 
@@ -279,10 +314,17 @@
             <div class="preview-badge">Preview</div>
             <h2>Management Dashboard View</h2>
           </div>
-          <div class="preview-notice">Administrative layout &middot; High-Fidelity Printable Canvas</div>
+          <div class="preview-tools">
+            <div class="zoom-controls">
+              <button class="tool-btn" id="dashZoomOut" title="Zoom Out">−</button>
+              <span class="zoom-level" id="dashZoomVal">100%</span>
+              <button class="tool-btn" id="dashZoomIn" title="Zoom In">+</button>
+              <button class="tool-btn" id="dashZoomReset" title="Reset Zoom">Fit</button>
+            </div>
+          </div>
         </div>
-        <div class="previewOuter">
-          <div id="dashboardRender"></div>
+        <div class="previewOuter" id="dashPreviewOuter">
+          <div id="dashboardRender" class="zoomable-render-target"></div>
         </div>
       </section>
 
@@ -293,10 +335,17 @@
             <div class="preview-badge">Preview</div>
             <h2>Officer-Wise Pendency View</h2>
           </div>
-          <div class="preview-notice">Departmental breakdown &middot; High-Fidelity Printable Canvas</div>
+          <div class="preview-tools">
+            <div class="zoom-controls">
+              <button class="tool-btn" id="offZoomOut" title="Zoom Out">−</button>
+              <span class="zoom-level" id="offZoomVal">100%</span>
+              <button class="tool-btn" id="offZoomIn" title="Zoom In">+</button>
+              <button class="tool-btn" id="offZoomReset" title="Reset Zoom">Fit</button>
+            </div>
+          </div>
         </div>
-        <div class="previewOuter">
-          <div id="officerRender"></div>
+        <div class="previewOuter" id="offPreviewOuter">
+          <div id="officerRender" class="zoomable-render-target"></div>
         </div>
       </section>
 

@@ -67,6 +67,7 @@ if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
 })();
 
 function showMsg(el, type, text) {
+  if (!el) return;
   el.className = 'msg ' + type;
   el.textContent = text;
 }
@@ -292,11 +293,49 @@ document.getElementById('generateBtn').addEventListener('click', () => {
   }
 });
 
+/* Smooth Number Counter Animation */
+function animateValue(id, start, end, duration) {
+  const obj = document.getElementById(id);
+  if (!obj) return;
+  if (start === end) { obj.textContent = end.toLocaleString(); return; }
+  const range = end - start;
+  const startTime = performance.now();
+  
+  function updateNumber(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const easeProgress = 1 - Math.pow(1 - progress, 3);
+    const value = Math.floor(start + range * easeProgress);
+    obj.textContent = value.toLocaleString();
+    if (progress < 1) {
+      requestAnimationFrame(updateNumber);
+    } else {
+      obj.textContent = end.toLocaleString();
+    }
+  }
+  requestAnimationFrame(updateNumber);
+}
+
 function renderSummary() {
   const g = computed.grand;
-  document.getElementById('sTotal').textContent = g.total.toLocaleString();
-  document.getElementById('sSla').textContent = g.withinSla.toLocaleString();
-  document.getElementById('sEsc').textContent = g.escalated.toLocaleString();
+  animateValue('sTotal', 0, g.total, 800);
+  animateValue('sSla', 0, g.withinSla, 800);
+  animateValue('sEsc', 0, g.escalated, 800);
+
+  // Compute SLA compliance percentage
+  const slaRate = g.total > 0 ? ((g.withinSla / g.total) * 100) : 0;
+  const escRate = g.total > 0 ? ((g.escalated / g.total) * 100) : 0;
+  
+  const slaProgressBar = document.getElementById('slaProgressBar');
+  const slaRateBadge = document.getElementById('slaRateBadge');
+  const sSlaPct = document.getElementById('sSlaPct');
+  const sEscPct = document.getElementById('sEscPct');
+  
+  if (slaProgressBar) slaProgressBar.style.width = slaRate.toFixed(1) + '%';
+  if (slaRateBadge) slaRateBadge.textContent = slaRate.toFixed(1) + '% SLA Compliance';
+  if (sSlaPct) sSlaPct.textContent = slaRate.toFixed(1) + '% (' + g.withinSla.toLocaleString() + ')';
+  if (sEscPct) sEscPct.textContent = escRate.toFixed(1) + '% (' + g.escalated.toLocaleString() + ')';
+
   const bucketSum = g.buckets.reduce((a, b) => a + b, 0);
   const offTotalCheck = Object.values(computed.offByDept).flat().every(o => o.buckets.reduce((a, b) => a + b, 0) === o.total);
   const deptSumCheck = computed.deptList.every(d => d.withinSla + d.escalated === d.total);
@@ -827,6 +866,190 @@ async function buildOfficerPivotExcelBlob() {
 }
 
 /* ==========================================================================
+   Executive Summary Quick-Copy Action
+   ========================================================================== */
+
+function initCopySummary() {
+  const copyBtn = document.getElementById('copySummaryBtn');
+  if (!copyBtn) return;
+  copyBtn.addEventListener('click', async () => {
+    if (!computed) return;
+    const g = computed.grand;
+    const slaRate = g.total > 0 ? ((g.withinSla / g.total) * 100).toFixed(1) : '0';
+    let brief = `📊 NDMC 311 COMPLAINT PENDENCY EXECUTIVE BRIEF (${computed.reportDateStr})\n`;
+    brief += `========================================================\n`;
+    brief += `• Total Pending Complaints: ${g.total.toLocaleString()}\n`;
+    brief += `• Within SLA (Compliant):   ${g.withinSla.toLocaleString()} (${slaRate}%)\n`;
+    brief += `• Escalated / Overdue:      ${g.escalated.toLocaleString()} (${(100 - parseFloat(slaRate)).toFixed(1)}%)\n\n`;
+    brief += `⏳ AGING BREAKDOWN (Escalated):\n`;
+    brief += `  - 0-15 Days:        ${g.buckets[0]}\n`;
+    brief += `  - 16-30 Days:       ${g.buckets[1]}\n`;
+    brief += `  - 31-45 Days:       ${g.buckets[2]}\n`;
+    brief += `  - 46-90 Days:       ${g.buckets[3]}\n`;
+    brief += `  - More than 90 Days: ${g.buckets[4]}\n\n`;
+    brief += `🏛️ TOP DEPARTMENTS BY PENDENCY:\n`;
+    computed.deptList.slice(0, 5).forEach((d, i) => {
+      brief += `  ${i + 1}. ${d.name}: ${d.total} complaints (${d.withinSla} compliant, ${d.escalated} escalated)\n`;
+    });
+    brief += `========================================================\nGenerated via NDMC 311 Analytics Studio`;
+    
+    try {
+      await navigator.clipboard.writeText(brief);
+      showMsg(document.getElementById('genMsg'), 'ok', 'Executive brief copied to clipboard successfully!');
+    } catch (e) {
+      showMsg(document.getElementById('genMsg'), 'info', 'Summary ready. Please copy from prompt.');
+    }
+  });
+}
+
+/* ==========================================================================
+   Preview Zoom Controls
+   ========================================================================== */
+
+function initPreviewControls() {
+  const configs = [
+    { prefix: 'dash', targetId: 'dashboardRender' },
+    { prefix: 'off', targetId: 'officerRender' }
+  ];
+
+  configs.forEach(cfg => {
+    let currentZoom = 1.0;
+    const target = document.getElementById(cfg.targetId);
+    const zoomVal = document.getElementById(cfg.prefix + 'ZoomVal');
+    const zoomIn = document.getElementById(cfg.prefix + 'ZoomIn');
+    const zoomOut = document.getElementById(cfg.prefix + 'ZoomOut');
+    const zoomReset = document.getElementById(cfg.prefix + 'ZoomReset');
+
+    function applyZoom(z) {
+      currentZoom = Math.max(0.4, Math.min(2.0, z));
+      if (target) {
+        target.style.transform = `scale(${currentZoom})`;
+      }
+      if (zoomVal) {
+        zoomVal.textContent = Math.round(currentZoom * 100) + '%';
+      }
+    }
+
+    if (zoomIn) zoomIn.addEventListener('click', () => applyZoom(currentZoom + 0.15));
+    if (zoomOut) zoomOut.addEventListener('click', () => applyZoom(currentZoom - 0.15));
+    if (zoomReset) zoomReset.addEventListener('click', () => applyZoom(1.0));
+  });
+}
+
+/* ==========================================================================
+   Interactive Cursor Light & Glow Engine
+   ========================================================================== */
+
+function initCursorLighting() {
+  const spotlight = document.getElementById('cursorSpotlight');
+  const glow = document.getElementById('cursorGlow');
+  const dot = document.getElementById('cursorDot');
+
+  let mouseX = window.innerWidth / 2;
+  let mouseY = window.innerHeight / 2;
+  let glowX = mouseX;
+  let glowY = mouseY;
+  let spotX = mouseX;
+  let spotY = mouseY;
+
+  window.addEventListener('mousemove', e => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+
+    if (dot) {
+      dot.style.left = mouseX + 'px';
+      dot.style.top = mouseY + 'px';
+    }
+
+    // Dynamic specular coordinate for glass cards
+    document.documentElement.style.setProperty('--mouse-x', mouseX + 'px');
+    document.documentElement.style.setProperty('--mouse-y', mouseY + 'px');
+  });
+
+  // Smooth lerping loop for aura and spotlight
+  function loop() {
+    glowX += (mouseX - glowX) * 0.18;
+    glowY += (mouseY - glowY) * 0.18;
+    spotX += (mouseX - spotX) * 0.08;
+    spotY += (mouseY - spotY) * 0.08;
+
+    if (glow) {
+      glow.style.left = glowX + 'px';
+      glow.style.top = glowY + 'px';
+    }
+    if (spotlight) {
+      spotlight.style.left = spotX + 'px';
+      spotlight.style.top = spotY + 'px';
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // Magnetic hover reaction on interactives
+  const interactiveSelectors = 'a, button, input, select, label, .card, .stat, .feature-chip, .hero-3d-container, .btn-export, .theme-toggle-btn';
+  document.addEventListener('mouseover', e => {
+    if (e.target.closest(interactiveSelectors)) {
+      glow && glow.classList.add('hovering');
+    }
+  });
+  document.addEventListener('mouseout', e => {
+    if (e.target.closest(interactiveSelectors)) {
+      glow && glow.classList.remove('hovering');
+    }
+  });
+
+  // Click Spark Particle Generation
+  window.addEventListener('click', e => {
+    createClickSparks(e.clientX, e.clientY);
+  });
+}
+
+function createClickSparks(x, y) {
+  const sparkColors = ['#3b82f6', '#6366f1', '#06b6d4', '#10b981', '#f43f5e', '#a855f7'];
+  const count = 10;
+  for (let i = 0; i < count; i++) {
+    const spark = document.createElement('div');
+    spark.className = 'cursor-spark';
+    const size = Math.random() * 6 + 3;
+    spark.style.width = size + 'px';
+    spark.style.height = size + 'px';
+    spark.style.left = x + 'px';
+    spark.style.top = y + 'px';
+    spark.style.backgroundColor = sparkColors[Math.floor(Math.random() * sparkColors.length)];
+    spark.style.boxShadow = `0 0 10px ${spark.style.backgroundColor}`;
+    
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * 55 + 25;
+    const dx = Math.cos(angle) * dist + 'px';
+    const dy = Math.sin(angle) * dist + 'px';
+    spark.style.setProperty('--dx', dx);
+    spark.style.setProperty('--dy', dy);
+
+    document.body.appendChild(spark);
+    setTimeout(() => spark.remove(), 600);
+  }
+}
+
+/* ==========================================================================
+   Theme Switcher (Dark / Light Mode)
+   ========================================================================== */
+
+function initThemeToggle() {
+  const themeBtn = document.getElementById('themeToggleBtn');
+  if (!themeBtn) return;
+  
+  const savedTheme = localStorage.getItem('ndmc_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', savedTheme);
+
+  themeBtn.addEventListener('click', () => {
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('ndmc_theme', newTheme);
+  });
+}
+
+/* ==========================================================================
    Interactive 3D Hero Scene (Three.js)
    ========================================================================== */
 
@@ -844,18 +1067,18 @@ function initHero3D() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   // Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
   scene.add(ambientLight);
 
-  const dirLight1 = new THREE.DirectionalLight(0x6366f1, 1.2);
+  const dirLight1 = new THREE.DirectionalLight(0x6366f1, 1.4);
   dirLight1.position.set(4, 5, 4);
   scene.add(dirLight1);
 
-  const dirLight2 = new THREE.DirectionalLight(0x06b6d4, 1.0);
+  const dirLight2 = new THREE.DirectionalLight(0x06b6d4, 1.2);
   dirLight2.position.set(-4, -3, 2);
   scene.add(dirLight2);
 
-  const pointLight = new THREE.PointLight(0xf43f5e, 0.8, 10);
+  const pointLight = new THREE.PointLight(0xf43f5e, 1.0, 10);
   pointLight.position.set(0, 2, 3);
   scene.add(pointLight);
 
@@ -868,14 +1091,14 @@ function initHero3D() {
   const icoMat = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     emissive: 0x3b82f6,
-    emissiveIntensity: 0.15,
+    emissiveIntensity: 0.2,
     roughness: 0.1,
     metalness: 0.1,
-    transmission: 0.7,
-    ior: 1.5,
-    thickness: 1.5,
+    transmission: 0.75,
+    ior: 1.55,
+    thickness: 1.6,
     transparent: true,
-    opacity: 0.92,
+    opacity: 0.94,
     wireframe: false
   });
   const icoMesh = new THREE.Mesh(icoGeo, icoMat);
@@ -886,7 +1109,7 @@ function initHero3D() {
     color: 0x6366f1,
     wireframe: true,
     transparent: true,
-    opacity: 0.35
+    opacity: 0.4
   });
   const wireMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1.62, 0), wireMat);
   heroGroup.add(wireMesh);
@@ -898,7 +1121,7 @@ function initHero3D() {
     roughness: 0.2,
     metalness: 0.85,
     emissive: 0x3b82f6,
-    emissiveIntensity: 0.2
+    emissiveIntensity: 0.25
   });
   const ring1 = new THREE.Mesh(ringGeo1, ringMat1);
   ring1.rotation.x = Math.PI / 3;
@@ -910,7 +1133,7 @@ function initHero3D() {
     roughness: 0.2,
     metalness: 0.85,
     emissive: 0x06b6d4,
-    emissiveIntensity: 0.2
+    emissiveIntensity: 0.25
   });
   const ring2 = new THREE.Mesh(ringGeo2, ringMat2);
   ring2.rotation.y = Math.PI / 4;
@@ -925,7 +1148,7 @@ function initHero3D() {
     roughness: 0.3,
     metalness: 0.7,
     emissive: 0x6366f1,
-    emissiveIntensity: 0.5
+    emissiveIntensity: 0.6
   });
   
   const particles = [];
@@ -983,10 +1206,9 @@ function initHero3D() {
 
   // Render loop
   let clock = new THREE.Clock();
-  let animId;
 
   function animate() {
-    animId = requestAnimationFrame(animate);
+    requestAnimationFrame(animate);
     const elapsedTime = clock.getElapsedTime();
 
     // Constant smooth floating & self-rotation
@@ -1052,6 +1274,10 @@ function init3DTilt() {
 
 // Initialize on DOM Ready
 document.addEventListener('DOMContentLoaded', () => {
+  initCursorLighting();
+  initThemeToggle();
+  initCopySummary();
+  initPreviewControls();
   initHero3D();
   init3DTilt();
 });
