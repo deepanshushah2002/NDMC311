@@ -1508,6 +1508,26 @@ table.map-table select:focus {
   gap: 12px;
 }
 
+.dashboard-sort-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dashboard-sort-control select {
+  padding: 7px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--ink-heading);
+  font: inherit;
+  cursor: pointer;
+}
+
 .zoom-controls {
   display: inline-flex;
   align-items: center;
@@ -1671,6 +1691,12 @@ table.rpt-table th {
   color: #ffffff !important;
   font-weight: 800;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+.over-90-highlight {
+  background: #fee2e2 !important;
+  color: #9f1239 !important;
+  font-weight: 700;
 }
 
 .col-head {

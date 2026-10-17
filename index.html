@@ -315,6 +315,12 @@
             <h2>Management Dashboard View</h2>
           </div>
           <div class="preview-tools">
+            <label class="dashboard-sort-control" for="dashboardSortSelect">Escalated sort
+              <select id="dashboardSortSelect" aria-label="Sort departments by escalated complaint count">
+                <option value="desc">High to low</option>
+                <option value="asc">Low to high</option>
+              </select>
+            </label>
             <div class="zoom-controls">
               <button class="tool-btn" id="dashZoomOut" title="Zoom Out">−</button>
               <span class="zoom-level" id="dashZoomVal">100%</span>

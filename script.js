@@ -348,15 +348,24 @@ function renderSummary() {
   document.getElementById('checklist').innerHTML = html;
 }
 
+function getDepartmentsByEscalatedCount(deptList) {
+  const sortDirection = document.getElementById('dashboardSortSelect')?.value || 'desc';
+  return [...deptList].sort((a, b) => {
+    const escalatedOrder = sortDirection === 'asc' ? a.escalated - b.escalated : b.escalated - a.escalated;
+    return escalatedOrder || a.name.localeCompare(b.name);
+  });
+}
+
 function renderDashboard() {
   const { deptList, grand, reportDateStr } = computed;
-  let rows = deptList.map(d => `
+  const dashboardDeptList = getDepartmentsByEscalatedCount(deptList);
+  let rows = dashboardDeptList.map(d => `
     <tr>
       <td class="dept-name-cell">${escapeHtml(d.name)}</td>
       <td class="lightblue">${d.total}</td>
       <td class="green">${d.withinSla}</td>
       <td class="red">${d.escalated}</td>
-      <td>${d.buckets[0]}</td><td>${d.buckets[1]}</td><td>${d.buckets[2]}</td><td>${d.buckets[3]}</td><td>${d.buckets[4]}</td>
+      <td>${d.buckets[0]}</td><td>${d.buckets[1]}</td><td>${d.buckets[2]}</td><td>${d.buckets[3]}</td><td class="${d.buckets[4] > 0 ? 'over-90-highlight' : ''}">${d.buckets[4]}</td>
     </tr>`).join('');
 
   const html = `
@@ -397,10 +406,16 @@ function renderDashboard() {
   document.getElementById('dashboardRender').innerHTML = html;
 }
 
+document.getElementById('dashboardSortSelect').addEventListener('change', () => {
+  if (!computed) return;
+  renderDashboard();
+  renderOfficerWise();
+});
+
 function renderOfficerWise() {
   const { deptList, offByDept, reportDateStr } = computed;
   let blocks = '';
-  deptList.forEach(d => {
+  getDepartmentsByEscalatedCount(deptList).forEach(d => {
     const officers = offByDept[d.name] || [];
     let rows = officers.map((o, i) => `
       <tr>
