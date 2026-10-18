@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NDMC 311 Analytics Studio &mdash; Plans &amp; Pricing</title>
+  <meta name="description" content="Plans and pricing for NDMC 311 Analytics Studio: monthly, 6-month and yearly access.">
+
+  <!-- Apply saved theme before first paint -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('ndmc_theme');
+        if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) { }
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Same theme as the main tool -->
+  <link rel="stylesheet" href="styles.css">
+
+  <style>
+    /* ---------- Pricing page ---------- */
+    .pricing-hero {
+      text-align: center;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 28px 0 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .pricing-hero .hero-title {
+      font-size: clamp(28px, 3.6vw, 42px);
+    }
+
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+      align-items: stretch;
+    }
+
+    .plan-card {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      padding: 32px 28px 28px;
+      text-align: left;
+    }
+
+    .plan-card>* {
+      position: relative;
+      z-index: 1;
+    }
+
+    .plan-card.featured {
+      border-color: rgba(99, 102, 241, 0.65);
+      box-shadow: var(--shadow-3d), 0 0 0 2px rgba(99, 102, 241, 0.5), 0 24px 48px -16px rgba(99, 102, 241, 0.35);
+    }
+
+    .plan-tag {
+      align-self: flex-start;
+      min-height: 26px;
+      padding: 3px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      color: var(--primary-indigo);
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .plan-card.featured .plan-tag {
+      color: #ffffff;
+      background: var(--grad-primary);
+      border-color: transparent;
+    }
+
+    .plan-tag.is-empty {
+      visibility: hidden;
+    }
+
+    .plan-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ink-heading);
+    }
+
+    .plan-price {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .plan-price .amount {
+      font-size: 46px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      background: var(--grad-primary);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .plan-price .per {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink-muted);
+    }
+
+    .plan-meta {
+      font-size: 13.5px;
+      color: var(--ink-muted);
+      min-height: 40px;
+    }
+
+    .plan-meta b {
+      color: #047857;
+    }
+
+    [data-theme="dark"] .plan-meta b {
+      color: #34d399;
+    }
+
+    .plan-features {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border-subtle);
+      flex: 1;
+    }
+
+    .plan-features li {
+      display: flex;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--ink-body);
+    }
+
+    .plan-features li::before {
+      content: '✓';
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: #047857;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    [data-theme="dark"] .plan-features li::before {
+      color: #34d399;
+    }
+
+    .plan-card .btn {
+      width: 100%;
+    }
+
+    .btn-outline {
+      background: var(--bg-card);
+      color: var(--ink-heading);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--primary-indigo);
+      color: var(--primary-indigo);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .pricing-note {
+      max-width: 1100px;
+      margin: 28px auto 0;
+      text-align: center;
+      font-size: 13.5px;
+      color: var(--ink-muted);
+    }
+
+    .nav-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    @media (max-width: 900px) {
+      .plans-grid {
+        grid-template-columns: 1fr;
+        max-width: 460px;
+      }
+
+      .plan-meta {
+        min-height: 0;
+      }
+    }
+
+  </style>
+</head>
+
+<body>
+  <div class="cursor-spotlight" id="cursorSpotlight" aria-hidden="true"></div>
+
+  <div class="bg-scene" aria-hidden="true">
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+    <div class="bg-orb orb-3"></div>
+    <div class="bg-grid"></div>
+  </div>
+
+  <header class="navbar-wrapper">
+    <nav class="navbar" aria-label="Primary">
+      <div class="nav-brand">
+        <div class="brand-logo-3d">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="logo-svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="logoGrad" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#3b82f6" />
+                <stop offset="0.5" stop-color="#6366f1" />
+                <stop offset="1" stop-color="#06b6d4" />
+              </linearGradient>
+            </defs>
+            <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#logoGrad)" />
+            <path d="M9 16L14 21L23 11" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">NDMC 311</span>
+          <span class="brand-tag">Analytics Studio</span>
+        </div>
+      </div>
+
+      <div class="nav-links">
+        <a href="index.html" class="nav-link nav-back">&larr; Open the tool</a>
+        <a href="#plans" class="nav-link">Plans</a>
+      </div>
+
+      <div class="nav-actions">
+        <button class="theme-toggle-btn" id="themeToggleBtn" type="button" title="Toggle Dark/Light Mode" aria-label="Toggle theme">
+          <span class="theme-icon sun-icon" aria-hidden="true">☀️</span>
+          <span class="theme-icon moon-icon" aria-hidden="true">🌙</span>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <section class="pricing-hero">
+      <div class="hero-badge">Plans &amp; Pricing</div>
+      <h1 class="hero-title">Simple pricing for <span class="gradient-text">NDMC 311 Analytics Studio</span></h1>
+      <p class="hero-subtitle">Pick the plan that fits. Every plan includes the full tool &mdash; the longer you commit, the more you save.</p>
+    </section>
+
+    <section id="plans" class="plans-grid" aria-label="Pricing plans"></section>
+
+    <p class="pricing-note">All prices are in Indian Rupees (₹). Choose a plan to continue to payment.</p>
+  </main>
+
+  <footer class="modern-footer">
+    <div class="footer-wrap">
+      <div class="footer-brand">
+        <span class="footer-dot"></span>
+        <span>NDMC 311 Grievance Intelligence &amp; Reporting System</span>
+      </div>
+      <div class="made-by">
+        Designed &amp; built by
+        <a href="https://deepanshushah.vercel.app" target="_blank" rel="noopener noreferrer" class="creator-badge">
+          <strong>Deepanshu Shah</strong>
+          <span class="creator-arrow">&rarr;</span>
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="promo.js"></script>
+  <script>
+    'use strict';
+
+    var P = window.NDMCPricing;
+    var REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    function $(id) { return document.getElementById(id); }
+
+    /* ---------- Plan cards (data comes from promo.js) ---------- */
+    function renderPlans() {
+      var grid = $('plans');
+      grid.innerHTML = '';
+      P.PLANS.forEach(function (p) {
+        var card = document.createElement('article');
+        card.className = 'card tilt-card plan-card' + (p.featured ? ' featured' : '');
+
+        var meta = p.months === 1
+          ? 'Billed every month. Cancel anytime.'
+          : 'Just <b>' + P.rupees(P.perMonth(p)) + '</b>/month &middot; save <b>' + P.rupees(P.saving(p)) + '</b> (' + P.savingPct(p) + '%)';
+
+        card.innerHTML =
+          '<span class="plan-tag' + (p.tag ? '' : ' is-empty') + '">' + (p.tag || 'Flexible') + '</span>' +
+          '<h2 class="plan-name">' + p.name + '</h2>' +
+          '<div class="plan-price"><span class="amount">' + P.rupees(p.price) + '</span><span class="per">' + P.periodLabel(p) + '</span></div>' +
+          '<p class="plan-meta">' + meta + '</p>' +
+          '<ul class="plan-features">' + P.FEATURES.map(function (f) { return '<li>' + f + '</li>'; }).join('') + '</ul>' +
+          '<button class="btn ' + (p.featured ? 'btn-primary' : 'btn-outline') + '" type="button" data-plan="' + p.id + '">Choose ' + p.name + '</button>';
+        grid.appendChild(card);
+      });
+    }
+
+    /* ---------- Theme ---------- */
+    function initTheme() {
+      var btn = $('themeToggleBtn');
+      var cur = function () { return document.documentElement.getAttribute('data-theme') || 'light'; };
+      btn.setAttribute('aria-pressed', cur() === 'dark' ? 'true' : 'false');
+      btn.addEventListener('click', function () {
+        var next = cur() === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        btn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
+        try { localStorage.setItem('ndmc_theme', next); } catch (e) { }
+      });
+    }
+
+    /* ---------- Cursor spotlight, card sheen & tilt (same effects as the tool) ---------- */
+    function initEffects() {
+      var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      if (REDUCED_MOTION || coarse) return;
+
+      var spot = $('cursorSpotlight');
+      var tx = innerWidth / 2, ty = innerHeight / 2, sx = tx, sy = ty, raf = 0;
+      function paint() { spot.style.transform = 'translate(' + sx + 'px,' + sy + 'px) translate(-50%,-50%)'; }
+      function loop() {
+        sx += (tx - sx) * 0.12; sy += (ty - sy) * 0.12; paint();
+        raf = (Math.abs(tx - sx) > 0.5 || Math.abs(ty - sy) > 0.5) ? requestAnimationFrame(loop) : 0;
+      }
+      paint();
+      window.addEventListener('mousemove', function (e) {
+        tx = e.clientX; ty = e.clientY;
+        if (!raf) raf = requestAnimationFrame(loop);
+      }, { passive: true });
+
+      document.querySelectorAll('.tilt-card').forEach(function (card) {
+        var r = 0, ev = null;
+        function apply() {
+          r = 0; if (!ev) return;
+          var b = card.getBoundingClientRect();
+          var x = ev.clientX - b.left, y = ev.clientY - b.top;
+          card.style.setProperty('--mouse-x', x + 'px');
+          card.style.setProperty('--mouse-y', y + 'px');
+          var rx = ((y - b.height / 2) / (b.height / 2)) * -3.5;
+          var ry = ((x - b.width / 2) / (b.width / 2)) * 3.5;
+          card.style.transform = 'perspective(1000px) rotateX(' + rx + 'deg) rotateY(' + ry + 'deg) translateY(-2px)';
+        }
+        card.addEventListener('mousemove', function (e) {
+          ev = e; card.classList.add('tilting');
+          if (!r) r = requestAnimationFrame(apply);
+        }, { passive: true });
+        card.addEventListener('mouseleave', function () {
+          ev = null; card.classList.remove('tilting');
+          card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0px)';
+        });
+      });
+    }
+
+    renderPlans();
+    initTheme();
+    initEffects();
+  </script>
+</body>
+
+</html>

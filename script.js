@@ -1,70 +1,32 @@
+'use strict';
+
 const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+const REPORT_WIDTH = 1600; // px width of .rpt-wrap
+const nf = new Intl.NumberFormat('en-IN');
+const fmt = n => nf.format(n);
+const $ = id => document.getElementById(id);
+const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
 let workbook = null;
 let currentHeaders = [];
 let currentRows = [];
-let computed = null; // {deptList, offByDept, grand, reportDateStr, reportDateObj, totalRows, unparsedDates, statusOrder, deptStatusAgg}
+let computed = null; // {deptList, offByDept, grand, reportDateStr, reportDateObj, totalRows, unparsedDates, futureDates, statusOrder, deptStatusAgg}
+let mapSelections = {};
 
-const dropZone = document.getElementById('dropZone');
-const fileInput = document.getElementById('fileInput');
-const fileNameEl = document.getElementById('fileName');
-const uploadMsg = document.getElementById('uploadMsg');
-const mapCard = document.getElementById('mapCard');
-const mapTable = document.getElementById('mapTable');
-const sheetSelect = document.getElementById('sheetSelect');
-const reportDateInput = document.getElementById('reportDateInput');
-const mapMsg = document.getElementById('mapMsg');
+const dropZone = $('dropZone');
+const fileInput = $('fileInput');
+const fileNameEl = $('fileName');
+const uploadMsg = $('uploadMsg');
+const mapCard = $('mapCard');
+const mapTable = $('mapTable');
+const sheetSelect = $('sheetSelect');
+const reportDateInput = $('reportDateInput');
+const mapMsg = $('mapMsg');
+const genMsg = $('genMsg');
 
-/* ---------------- File Drag & Drop ---------------- */
-
-dropZone.addEventListener('click', (e) => {
-  if (e.target !== fileInput) {
-    e.preventDefault();
-    fileInput.click();
-  }
-});
-
-['dragenter', 'dragover'].forEach(evt => {
-  dropZone.addEventListener(evt, e => {
-    e.preventDefault(); e.stopPropagation();
-    dropZone.classList.add('has-file');
-  });
-});
-
-['dragleave', 'dragend'].forEach(evt => {
-  dropZone.addEventListener(evt, e => {
-    e.preventDefault(); e.stopPropagation();
-    if (!fileInput.files.length) dropZone.classList.remove('has-file');
-  });
-});
-
-dropZone.addEventListener('drop', e => {
-  e.preventDefault(); e.stopPropagation();
-  const dt = e.dataTransfer;
-  if (dt && dt.files && dt.files.length) {
-    fileInput.files = dt.files;
-    handleFile(dt.files[0]);
-  }
-});
-
-// Safety net: stop browser from opening dropped files outside drop zone
-['dragover', 'drop'].forEach(evt => {
-  window.addEventListener(evt, e => { e.preventDefault(); }, false);
-});
-
-fileInput.addEventListener('change', () => {
-  if (fileInput.files.length) handleFile(fileInput.files[0]);
-});
-
-if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
-  const hintLine = dropZone.querySelector('.drop-primary-text');
-  if (hintLine) hintLine.textContent = 'Tap here to select your complaint Excel';
-}
-
-// Default report date = today
-(function () {
-  const t = new Date();
-  reportDateInput.value = t.toISOString().slice(0, 10);
-})();
+/* ==========================================================================
+   Helpers
+   ========================================================================== */
 
 function showMsg(el, type, text) {
   if (!el) return;
@@ -72,28 +34,138 @@ function showMsg(el, type, text) {
   el.textContent = text;
 }
 
+function clearMsg(el) {
+  if (!el) return;
+  el.className = 'msg';
+  el.textContent = '';
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function safeStorageGet(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+
+function safeStorageSet(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) { /* storage unavailable */ }
+}
+
+function localDateInputValue(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+/* Nav links to cards that are still hidden are disabled */
+function refreshNav() {
+  document.querySelectorAll('.nav-link[href^="#"]').forEach(a => {
+    const href = a.getAttribute('href') || '';
+    if (href.charAt(0) !== '#') return; // normal page links (e.g. pricing.html) are always enabled
+    const target = document.querySelector(href);
+    const off = !target || target.classList.contains('hidden');
+    a.classList.toggle('is-disabled', off);
+    a.setAttribute('aria-disabled', off ? 'true' : 'false');
+    a.tabIndex = off ? -1 : 0;
+  });
+}
+
+/* Hide previous results so stale numbers are never shown after a new upload / sheet change */
+function resetResults() {
+  computed = null;
+  ['summaryCard', 'dashPreviewCard', 'offPreviewCard'].forEach(id => $(id).classList.add('hidden'));
+  $('dashboardRender').innerHTML = '';
+  $('officerRender').innerHTML = '';
+  clearMsg(genMsg);
+  refreshNav();
+}
+
+/* ==========================================================================
+   File upload
+   ========================================================================== */
+
+function isExcelFile(file) {
+  return !!file && /\.(xlsx|xls)$/i.test(file.name);
+}
+
+// Allow picking the same file again (otherwise "change" does not fire)
+fileInput.addEventListener('click', () => { fileInput.value = ''; });
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files && fileInput.files.length) handleFile(fileInput.files[0]);
+});
+
+['dragenter', 'dragover'].forEach(evt => {
+  dropZone.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation();
+    dropZone.classList.add('dragging');
+  });
+});
+
+['dragleave', 'dragend', 'drop'].forEach(evt => {
+  dropZone.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation();
+    dropZone.classList.remove('dragging');
+  });
+});
+
+dropZone.addEventListener('drop', e => {
+  const files = e.dataTransfer && e.dataTransfer.files;
+  if (files && files.length) handleFile(files[0]);
+});
+
+// Stop the browser from opening files dropped outside the drop zone
+['dragover', 'drop'].forEach(evt => {
+  window.addEventListener(evt, e => { e.preventDefault(); }, false);
+});
+
 function handleFile(file) {
+  if (!isExcelFile(file)) {
+    showMsg(uploadMsg, 'error', 'Unsupported file type. Please choose an .xlsx or .xls file.');
+    return;
+  }
+
+  workbook = null;
+  currentHeaders = [];
+  currentRows = [];
+  resetResults();
+  mapCard.classList.add('hidden');
+  clearMsg(mapMsg);
+  refreshNav();
+
   fileNameEl.textContent = '📁 ' + file.name;
-  dropZone.classList.add('has-file');
-  uploadMsg.className = 'msg';
+  dropZone.classList.remove('has-file');
+  showMsg(uploadMsg, 'info', 'Reading file…');
+
   const reader = new FileReader();
+  reader.onerror = function () {
+    showMsg(uploadMsg, 'error', 'Could not read this file. Please try again.');
+  };
   reader.onload = function (e) {
     try {
       const data = new Uint8Array(e.target.result);
       workbook = XLSX.read(data, { type: 'array', cellDates: true });
+      if (!workbook.SheetNames.length) throw new Error('The workbook has no sheets.');
+
       sheetSelect.innerHTML = '';
       workbook.SheetNames.forEach(name => {
         const opt = document.createElement('option');
         opt.value = name; opt.textContent = name;
         sheetSelect.appendChild(opt);
       });
-      // Prefer a sheet that looks like complaint data
-      let preferred = workbook.SheetNames.find(n => /complaint/i.test(n)) || workbook.SheetNames[0];
+      const preferred = workbook.SheetNames.find(n => /complaint/i.test(n)) || workbook.SheetNames[0];
       sheetSelect.value = preferred;
-      loadSheet(preferred);
+
       mapCard.classList.remove('hidden');
+      refreshNav();
+      loadSheet(preferred);
+
+      dropZone.classList.add('has-file');
       showMsg(uploadMsg, 'ok', 'File loaded successfully: ' + file.name);
-      mapCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      mapCard.scrollIntoView({ behavior: REDUCED_MOTION ? 'auto' : 'smooth', block: 'start' });
     } catch (err) {
       showMsg(uploadMsg, 'error', 'Could not read this file: ' + err.message);
     }
@@ -101,16 +173,30 @@ function handleFile(file) {
   reader.readAsArrayBuffer(file);
 }
 
-sheetSelect.addEventListener('change', () => loadSheet(sheetSelect.value));
+sheetSelect.addEventListener('change', () => {
+  resetResults();
+  loadSheet(sheetSelect.value);
+});
 
 function loadSheet(name) {
   const ws = workbook.Sheets[name];
   const json = XLSX.utils.sheet_to_json(ws, { defval: '', raw: true });
-  if (!json.length) { showMsg(mapMsg, 'error', 'Selected sheet has no data rows.'); return; }
+  if (!json.length) {
+    currentHeaders = [];
+    currentRows = [];
+    mapTable.innerHTML = '';
+    showMsg(mapMsg, 'error', 'The selected sheet has no data rows. Pick another sheet.');
+    return false;
+  }
   currentHeaders = Object.keys(json[0]);
   currentRows = json;
   buildMapTable();
+  return true;
 }
+
+/* ==========================================================================
+   Column mapping
+   ========================================================================== */
 
 function normKey(s) { return s.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, ''); }
 
@@ -118,50 +204,91 @@ function guessColumn(candidates) {
   const norm = currentHeaders.map(normKey);
   for (const c of candidates) {
     const nc = normKey(c);
-    let idx = norm.indexOf(nc);
+    if (!nc) continue;
+    const idx = norm.indexOf(nc);
     if (idx >= 0) return currentHeaders[idx];
   }
   for (const c of candidates) {
     const nc = normKey(c);
-    let idx = norm.findIndex(h => h.includes(nc) || nc.includes(h));
+    if (!nc) continue;
+    // Guard against empty / very short headers matching everything
+    const idx = norm.findIndex(h => h && (h.includes(nc) || (h.length >= 4 && nc.includes(h))));
     if (idx >= 0) return currentHeaders[idx];
   }
-  return currentHeaders[0] || '';
+  return ''; // not detected
 }
 
 const FIELD_DEFS = [
-  { key: 'date', label: 'Complaint Date column', candidates: ['Date', 'Complaint Date'] },
-  { key: 'dept', label: 'Department column', candidates: ['Department'] },
-  { key: 'officer', label: 'Currently Assigned To (Officer) column', candidates: ['Currently Assigned To'] },
-  { key: 'esc', label: 'Is Escalated column', candidates: ['Is Escalated'] },
-  { key: 'mobile', label: 'Assigned To Mobile column (for pivot list export)', candidates: ['Assigned To Mobile', 'Mobile'] },
-  { key: 'status', label: 'Current Status column (for status-wise pivot export)', candidates: ['Current Satus', 'Current Status', 'Status'] },
+  { key: 'date', label: 'Complaint Date column', required: true, candidates: ['Date', 'Complaint Date'] },
+  { key: 'dept', label: 'Department column', required: true, candidates: ['Department'] },
+  { key: 'officer', label: 'Currently Assigned To (Officer) column', required: true, candidates: ['Currently Assigned To'] },
+  { key: 'esc', label: 'Is Escalated column', required: true, candidates: ['Is Escalated'] },
+  { key: 'mobile', label: 'Assigned To Mobile column (pivot list export)', required: false, candidates: ['Assigned To Mobile', 'Mobile'] },
+  { key: 'status', label: 'Current Status column (status pivot export)', required: false, candidates: ['Current Satus', 'Current Status', 'Status'] },
 ];
-let mapSelections = {};
+
+function missingRequired() {
+  return FIELD_DEFS.filter(f => f.required && !mapSelections[f.key]);
+}
+
+function updateMapHint() {
+  const missing = missingRequired();
+  if (missing.length) {
+    showMsg(mapMsg, 'error', 'Select a column for: ' + missing.map(f => f.label.replace(' column', '')).join(', ') + '.');
+  } else {
+    showMsg(mapMsg, 'info', 'Columns look good. Adjust if needed, verify the report date, then click Generate.');
+  }
+}
 
 function buildMapTable() {
   mapTable.innerHTML = '';
   FIELD_DEFS.forEach(f => {
     const guess = guessColumn(f.candidates);
     mapSelections[f.key] = guess;
+
     const tr = document.createElement('tr');
     const td1 = document.createElement('td');
     td1.textContent = f.label;
+    const tag = document.createElement('span');
+    tag.className = 'req-tag';
+    tag.textContent = f.required ? 'required' : 'optional';
+    td1.appendChild(tag);
+
     const td2 = document.createElement('td');
     const sel = document.createElement('select');
+    sel.setAttribute('aria-label', f.label);
+
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = f.required ? '— Not detected: choose a column —' : '— Skip (optional) —';
+    sel.appendChild(none);
+
     currentHeaders.forEach(h => {
       const opt = document.createElement('option');
       opt.value = h; opt.textContent = h;
-      if (h === guess) opt.selected = true;
       sel.appendChild(opt);
     });
-    sel.addEventListener('change', () => { mapSelections[f.key] = sel.value; });
+    sel.value = guess;
+
+    const syncRow = () => tr.classList.toggle('row-missing', f.required && !sel.value);
+    syncRow();
+
+    sel.addEventListener('change', () => {
+      mapSelections[f.key] = sel.value;
+      syncRow();
+      updateMapHint();
+    });
+
     td2.appendChild(sel);
     tr.appendChild(td1); tr.appendChild(td2);
     mapTable.appendChild(tr);
   });
-  showMsg(mapMsg, 'info', 'Columns auto-detected. Adjust if needed, verify report date, and click Generate.');
+  updateMapHint();
 }
+
+/* ==========================================================================
+   Parsing & aggregation
+   ========================================================================== */
 
 function parseDateVal(v) {
   if (v instanceof Date && !isNaN(v)) return new Date(v.getFullYear(), v.getMonth(), v.getDate());
@@ -169,10 +296,11 @@ function parseDateVal(v) {
     try {
       const d = XLSX.SSF.parse_date_code(v);
       if (d) return new Date(d.y, d.m - 1, d.d);
-    } catch (e) { }
+    } catch (e) { /* fall through */ }
   }
   if (typeof v === 'string') {
     const s = v.trim();
+    if (!s) return null;
     let m = s.match(/^(\d{1,2})[-\/]([A-Za-z]{3,})[-\/](\d{4})/);
     if (m) {
       const day = parseInt(m[1], 10);
@@ -203,40 +331,53 @@ function fmtDateDDMMMYYYY(d) {
   return String(d.getDate()).padStart(2, '0') + '-' + months[d.getMonth()] + '-' + d.getFullYear();
 }
 
-document.getElementById('generateBtn').addEventListener('click', () => {
+function cellText(r, col) {
+  if (!col) return '';
+  const v = r[col];
+  return (v === undefined || v === null) ? '' : v.toString().trim();
+}
+
+$('generateBtn').addEventListener('click', generateReport);
+
+function generateReport() {
   try {
+    if (!currentRows.length) { showMsg(mapMsg, 'error', 'No data loaded. Upload a file and pick a sheet with data.'); return; }
+    const missing = missingRequired();
+    if (missing.length) { updateMapHint(); return; }
     if (!reportDateInput.value) { showMsg(mapMsg, 'error', 'Please choose a report date.'); return; }
+
     const [ry, rm, rd] = reportDateInput.value.split('-').map(x => parseInt(x, 10));
     const reportDate = new Date(ry, rm - 1, rd);
     const reportDateStr = fmtDateDDMMMYYYY(reportDate);
 
-    const colDate = mapSelections.date, colDept = mapSelections.dept,
-      colOfficer = mapSelections.officer, colEsc = mapSelections.esc,
-      colMobile = mapSelections.mobile, colStatus = mapSelections.status;
+    const { date: colDate, dept: colDept, officer: colOfficer, esc: colEsc, mobile: colMobile, status: colStatus } = mapSelections;
 
-    const deptAgg = {}; // dept -> {total,escalated,buckets[5]}
-    const offAgg = {};  // dept||officer -> {dept,officer,total,buckets[5],mobile}
-    const statusOrder = []; // first-seen order of distinct status values
-    const deptStatusAgg = {}; // dept -> {status: count}
-    let totalRows = 0, unparsedDates = 0;
+    const deptAgg = {};
+    const offAgg = {};
+    const statusOrder = [];
+    const deptStatusAgg = {};
+    let totalRows = 0, unparsedDates = 0, futureDates = 0;
 
     currentRows.forEach(r => {
-      let dept = (r[colDept] === undefined || r[colDept] === null) ? '' : r[colDept].toString().trim();
+      let dept = cellText(r, colDept);
       if (dept === '') dept = 'Unspecified Department';
-      let officer = (r[colOfficer] === undefined || r[colOfficer] === null) ? '' : r[colOfficer].toString().trim();
+      let officer = cellText(r, colOfficer);
       if (officer === '' || officer === '-') officer = 'Unassigned';
-      let mobile = (colMobile && r[colMobile] !== undefined && r[colMobile] !== null) ? r[colMobile].toString().trim() : '';
+      let mobile = cellText(r, colMobile);
       if (mobile === '-') mobile = '';
-      let status = (colStatus && r[colStatus] !== undefined && r[colStatus] !== null) ? r[colStatus].toString().trim() : '';
+      let status = cellText(r, colStatus);
       if (status === '') status = 'Unspecified';
-      const escRaw = (r[colEsc] === undefined || r[colEsc] === null) ? '' : r[colEsc].toString().trim().toLowerCase();
+      const escRaw = cellText(r, colEsc).toLowerCase();
       const isEsc = (escRaw === 'yes' || escRaw === 'y' || escRaw === 'true' || escRaw === '1');
+
       const dateVal = parseDateVal(r[colDate]);
       let age = 0;
       if (dateVal) {
-        age = Math.floor((reportDate - dateVal) / 86400000);
-        if (age < 0) age = 0;
-      } else { unparsedDates++; }
+        const diff = Math.round((reportDate - dateVal) / 86400000);
+        if (diff < 0) { futureDates++; } else { age = diff; }
+      } else {
+        unparsedDates++;
+      }
       const b = bucketOf(age);
 
       totalRows++;
@@ -255,16 +396,16 @@ document.getElementById('generateBtn').addEventListener('click', () => {
       deptStatusAgg[dept][status] = (deptStatusAgg[dept][status] || 0) + 1;
     });
 
-    // department list sorted desc by total pending
-    let deptList = Object.keys(deptAgg).map(name => {
+    const deptList = Object.keys(deptAgg).map(name => {
       const a = deptAgg[name];
       return { name, total: a.total, escalated: a.escalated, withinSla: a.total - a.escalated, buckets: a.buckets };
     });
     deptList.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
 
-    // officers grouped by department, ordered same as deptList; sorted desc within dept
     const offByDept = {};
+    let officerRowSum = 0;
     Object.values(offAgg).forEach(o => {
+      officerRowSum += o.total;
       if (!offByDept[o.dept]) offByDept[o.dept] = [];
       offByDept[o.dept].push(o);
     });
@@ -278,42 +419,57 @@ document.getElementById('generateBtn').addEventListener('click', () => {
       return acc;
     }, { total: 0, escalated: 0, withinSla: 0, buckets: [0, 0, 0, 0, 0] });
 
-    computed = { deptList, offByDept, grand, reportDateStr, reportDateObj: reportDate, totalRows, unparsedDates, statusOrder: statusOrder.sort((a, b) => a.localeCompare(b)), deptStatusAgg };
+    computed = {
+      deptList, offByDept, grand, reportDateStr, reportDateObj: reportDate,
+      totalRows, unparsedDates, futureDates, officerRowSum,
+      statusOrder: statusOrder.sort((a, b) => a.localeCompare(b)), deptStatusAgg
+    };
 
     renderSummary();
     renderDashboard();
     renderOfficerWise();
-    document.getElementById('summaryCard').classList.remove('hidden');
-    document.getElementById('dashPreviewCard').classList.remove('hidden');
-    document.getElementById('offPreviewCard').classList.remove('hidden');
-    document.getElementById('summaryCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    ['summaryCard', 'dashPreviewCard', 'offPreviewCard'].forEach(id => $(id).classList.remove('hidden'));
+    refreshNav();
+    if (zoomers.dash) zoomers.dash.fit();
+    if (zoomers.off) zoomers.off.fit();
+    clearMsg(genMsg);
+    $('summaryCard').scrollIntoView({ behavior: REDUCED_MOTION ? 'auto' : 'smooth', block: 'start' });
   } catch (err) {
     showMsg(mapMsg, 'error', 'Error while generating: ' + err.message);
     console.error(err);
   }
-});
+}
 
-/* Smooth Number Counter Animation */
+/* One ordering used by previews, PDFs and the Excel report exports */
+function orderedDepts(deptList) {
+  const sel = $('dashboardSortSelect');
+  const dir = sel ? sel.value : 'desc';
+  return [...deptList].sort((a, b) => {
+    const byEsc = dir === 'asc' ? a.escalated - b.escalated : b.escalated - a.escalated;
+    return byEsc || a.name.localeCompare(b.name);
+  });
+}
+
+/* ==========================================================================
+   Rendering
+   ========================================================================== */
+
 function animateValue(id, start, end, duration) {
-  const obj = document.getElementById(id);
+  const obj = $(id);
   if (!obj) return;
-  if (start === end) { obj.textContent = end.toLocaleString(); return; }
+  if (start === end || REDUCED_MOTION) { obj.textContent = fmt(end); return; }
   const range = end - start;
   const startTime = performance.now();
-  
-  function updateNumber(now) {
-    const elapsed = now - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-    const easeProgress = 1 - Math.pow(1 - progress, 3);
-    const value = Math.floor(start + range * easeProgress);
-    obj.textContent = value.toLocaleString();
-    if (progress < 1) {
-      requestAnimationFrame(updateNumber);
-    } else {
-      obj.textContent = end.toLocaleString();
-    }
+
+  function step(now) {
+    const progress = Math.min((now - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    obj.textContent = fmt(Math.floor(start + range * eased));
+    if (progress < 1) requestAnimationFrame(step);
+    else obj.textContent = fmt(end);
   }
-  requestAnimationFrame(updateNumber);
+  requestAnimationFrame(step);
 }
 
 function renderSummary() {
@@ -322,44 +478,52 @@ function renderSummary() {
   animateValue('sSla', 0, g.withinSla, 800);
   animateValue('sEsc', 0, g.escalated, 800);
 
-  // Compute SLA compliance percentage
-  const slaRate = g.total > 0 ? ((g.withinSla / g.total) * 100) : 0;
-  const escRate = g.total > 0 ? ((g.escalated / g.total) * 100) : 0;
-  
-  const slaProgressBar = document.getElementById('slaProgressBar');
-  const slaRateBadge = document.getElementById('slaRateBadge');
-  const sSlaPct = document.getElementById('sSlaPct');
-  const sEscPct = document.getElementById('sEscPct');
-  
-  if (slaProgressBar) slaProgressBar.style.width = slaRate.toFixed(1) + '%';
-  if (slaRateBadge) slaRateBadge.textContent = slaRate.toFixed(1) + '% SLA Compliance';
-  if (sSlaPct) sSlaPct.textContent = slaRate.toFixed(1) + '% (' + g.withinSla.toLocaleString() + ')';
-  if (sEscPct) sEscPct.textContent = escRate.toFixed(1) + '% (' + g.escalated.toLocaleString() + ')';
+  const slaRate = g.total > 0 ? (g.withinSla / g.total) * 100 : 0;
+  const escRate = g.total > 0 ? (g.escalated / g.total) * 100 : 0;
 
-  const bucketSum = g.buckets.reduce((a, b) => a + b, 0);
-  const offTotalCheck = Object.values(computed.offByDept).flat().every(o => o.buckets.reduce((a, b) => a + b, 0) === o.total);
-  const deptSumCheck = computed.deptList.every(d => d.withinSla + d.escalated === d.total);
-  
-  let html = '';
-  html += `Total records ingested: <b>${computed.totalRows}</b>` + (computed.unparsedDates ? ` &nbsp;(<span class="bad">${computed.unparsedDates} rows had an unreadable date &mdash; aged as 0 days</span>)` : '') + '<br>';
-  html += `Integrity Check &middot; Total Pending = Within SLA + Escalated: <span class="${deptSumCheck ? 'ok' : 'bad'}">${deptSumCheck ? 'PASS' : 'FAIL'}</span> &nbsp;&middot;&nbsp; `;
-  html += `Dashboard aging buckets (${bucketSum}) = Escalated (${g.escalated}): <span class="${bucketSum === g.escalated ? 'ok' : 'bad'}">${bucketSum === g.escalated ? 'PASS' : 'FAIL'}</span> &nbsp;&middot;&nbsp; `;
-  html += `Officer aging consistency: <span class="${offTotalCheck ? 'ok' : 'bad'}">${offTotalCheck ? 'PASS' : 'FAIL'}</span>`;
-  document.getElementById('checklist').innerHTML = html;
-}
+  $('slaProgressBar').style.width = slaRate.toFixed(1) + '%';
+  $('slaRateBadge').textContent = slaRate.toFixed(1) + '% SLA compliance';
+  $('sSlaPct').textContent = slaRate.toFixed(1) + '% (' + fmt(g.withinSla) + ')';
+  $('sEscPct').textContent = escRate.toFixed(1) + '% (' + fmt(g.escalated) + ')';
 
-function getDepartmentsByEscalatedCount(deptList) {
-  const sortDirection = document.getElementById('dashboardSortSelect')?.value || 'desc';
-  return [...deptList].sort((a, b) => {
-    const escalatedOrder = sortDirection === 'asc' ? a.escalated - b.escalated : b.escalated - a.escalated;
-    return escalatedOrder || a.name.localeCompare(b.name);
-  });
+  const deptRowSum = computed.deptList.reduce((s, d) => s + d.total, 0);
+  const checks = [
+    {
+      ok: deptRowSum === computed.totalRows,
+      text: `Rows in file (${fmt(computed.totalRows)}) = sum of department totals (${fmt(deptRowSum)})`
+    },
+    {
+      ok: computed.officerRowSum === computed.totalRows,
+      text: `Rows in file (${fmt(computed.totalRows)}) = sum of officer totals (${fmt(computed.officerRowSum)})`
+    },
+    {
+      ok: computed.unparsedDates === 0,
+      text: computed.unparsedDates === 0
+        ? 'All complaint dates were read successfully'
+        : `${fmt(computed.unparsedDates)} row(s) have a blank or unreadable date and were aged as 0 days`
+    },
+    {
+      ok: computed.futureDates === 0,
+      text: computed.futureDates === 0
+        ? 'No complaints are dated after the report date'
+        : `${fmt(computed.futureDates)} row(s) are dated after the report date and were aged as 0 days`
+    },
+    {
+      ok: !(g.total > 0 && g.escalated === 0),
+      text: (g.total > 0 && g.escalated === 0)
+        ? 'No rows are flagged as escalated — confirm the "Is Escalated" column mapping'
+        : `${fmt(g.escalated)} row(s) flagged as escalated`
+    }
+  ];
+
+  $('checklist').innerHTML = checks.map(c =>
+    `<div class="chk-line"><span class="${c.ok ? 'ok' : 'bad'}">${c.ok ? 'OK' : 'CHECK'}</span><span>${escapeHtml(c.text)}</span></div>`
+  ).join('');
 }
 
 function renderDashboard() {
   const { deptList, grand, reportDateStr } = computed;
-  const dashboardDeptList = getDepartmentsByEscalatedCount(deptList);
-  let rows = dashboardDeptList.map(d => `
+  const rows = orderedDepts(deptList).map(d => `
     <tr>
       <td class="dept-name-cell">${escapeHtml(d.name)}</td>
       <td class="lightblue">${d.total}</td>
@@ -368,7 +532,7 @@ function renderDashboard() {
       <td>${d.buckets[0]}</td><td>${d.buckets[1]}</td><td>${d.buckets[2]}</td><td>${d.buckets[3]}</td><td class="${d.buckets[4] > 0 ? 'over-90-highlight' : ''}">${d.buckets[4]}</td>
     </tr>`).join('');
 
-  const html = `
+  $('dashboardRender').innerHTML = `
   <div class="rpt-wrap" id="dashboardCanvasTarget">
     <div class="rpt-title">311 APP-PENDING COMPLAINTS &ndash; MANAGEMENT DASHBOARD</div>
     <div class="rpt-asof">As on ${reportDateStr}</div>
@@ -403,10 +567,10 @@ function renderDashboard() {
       </tr>
     </table>
   </div>`;
-  document.getElementById('dashboardRender').innerHTML = html;
+  if (zoomers.dash) zoomers.dash.refresh();
 }
 
-document.getElementById('dashboardSortSelect').addEventListener('change', () => {
+$('dashboardSortSelect').addEventListener('change', () => {
   if (!computed) return;
   renderDashboard();
   renderOfficerWise();
@@ -415,9 +579,9 @@ document.getElementById('dashboardSortSelect').addEventListener('change', () => 
 function renderOfficerWise() {
   const { deptList, offByDept, reportDateStr } = computed;
   let blocks = '';
-  getDepartmentsByEscalatedCount(deptList).forEach(d => {
+  orderedDepts(deptList).forEach(d => {
     const officers = offByDept[d.name] || [];
-    let rows = officers.map((o, i) => `
+    const rows = officers.map((o, i) => `
       <tr>
         <td>${i + 1}</td>
         <td class="off-name-cell">${escapeHtml(o.officer)}</td>
@@ -441,22 +605,84 @@ function renderOfficerWise() {
     </div>`;
   });
 
-  const html = `
+  $('officerRender').innerHTML = `
   <div class="rpt-wrap" id="officerCanvasTarget">
     <div class="off-title" id="officerTitleBlock">OFFICER-WISE PENDENCY AS ON ${reportDateStr.toUpperCase()}</div>
     ${blocks}
   </div>`;
-  document.getElementById('officerRender').innerHTML = html;
+  if (zoomers.off) zoomers.off.refresh();
 }
 
-function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/* ==========================================================================
+   Preview zoom (transform-based; sizer keeps scrollbars correct)
+   ========================================================================== */
+
+const zoomers = {};
+
+function initPreviewControls() {
+  [
+    { key: 'dash', prefix: 'dash', targetId: 'dashboardRender', outerId: 'dashPreviewOuter', sizerId: 'dashSizer' },
+    { key: 'off', prefix: 'off', targetId: 'officerRender', outerId: 'offPreviewOuter', sizerId: 'offSizer' }
+  ].forEach(cfg => {
+    const target = $(cfg.targetId);
+    const outer = $(cfg.outerId);
+    const sizer = $(cfg.sizerId);
+    const zoomVal = $(cfg.prefix + 'ZoomVal');
+    let zoom = 1;
+
+    function refresh() {
+      target.style.transform = `scale(${zoom})`;
+      const w = target.offsetWidth || REPORT_WIDTH;
+      const h = target.offsetHeight;
+      sizer.style.width = Math.ceil(w * zoom) + 'px';
+      sizer.style.height = Math.ceil(h * zoom) + 'px';
+      if (zoomVal) zoomVal.textContent = Math.round(zoom * 100) + '%';
+    }
+
+    function setZoom(z) {
+      zoom = Math.max(0.25, Math.min(2.0, z));
+      refresh();
+    }
+
+    function fit() {
+      const avail = outer.clientWidth;
+      setZoom(avail > 0 ? (avail - 4) / REPORT_WIDTH : 1);
+    }
+
+    $(cfg.prefix + 'ZoomIn').addEventListener('click', () => setZoom(zoom + 0.15));
+    $(cfg.prefix + 'ZoomOut').addEventListener('click', () => setZoom(zoom - 0.15));
+    $(cfg.prefix + 'ZoomReset').addEventListener('click', fit);
+
+    zoomers[cfg.key] = { refresh, fit };
+  });
 }
 
-/* ---------------- PDF / FILE EXPORT ---------------- */
+/* Exports must measure/render the report at 100% (transforms distort getBoundingClientRect) */
+async function withoutZoom(fn) {
+  const targets = [$('dashboardRender'), $('officerRender')];
+  const saved = targets.map(t => ({ transform: t.style.transform, transition: t.style.transition }));
+  targets.forEach(t => { t.style.transition = 'none'; t.style.transform = 'none'; });
+  void document.body.offsetHeight; // force reflow
+  try {
+    return await fn();
+  } finally {
+    targets.forEach((t, i) => { t.style.transform = saved[i].transform; t.style.transition = saved[i].transition; });
+  }
+}
+
+/* ==========================================================================
+   PDF / file export
+   ========================================================================== */
 
 async function renderNodeToCanvas(node) {
-  return await html2canvas(node, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+  return await html2canvas(node, {
+    scale: 2,
+    backgroundColor: '#ffffff',
+    useCORS: true,
+    scrollX: 0,
+    scrollY: 0,
+    windowWidth: Math.max(document.documentElement.clientWidth, REPORT_WIDTH + 120)
+  });
 }
 
 let _downloadsCap;
@@ -497,111 +723,134 @@ async function saveBlob(filename, blob) {
   return 'saved';
 }
 
-document.getElementById('dashPdfBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('dashPdfBtn');
-  const genMsg = document.getElementById('genMsg');
-  btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>Building PDF...';
+/* Shared button/busy/message wrapper for all four exports */
+async function runExport(btnId, busyText, task, okText, errPrefix) {
+  if (!computed) { showMsg(genMsg, 'error', 'Generate the report first.'); return; }
+  const btn = $(btnId);
+  const orig = btn.innerHTML;
+  const setLabel = t => { btn.innerHTML = '<span class="spinner"></span>' + t; };
+  btn.disabled = true;
+  setLabel(busyText);
   try {
-    const node = document.getElementById('dashboardCanvasTarget');
-    const canvas = await renderNodeToCanvas(node);
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-    const margin = 8;
-    const maxW = pageW - margin * 2;
-    const maxH = pageH - margin * 2;
+    await task(setLabel);
+    showMsg(genMsg, 'ok', okText);
+  } catch (err) {
+    showMsg(genMsg, 'error', errPrefix + ': ' + downloadErrorText(err));
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+function cropCanvas(src, y, h) {
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, c.width, h);
+  ctx.drawImage(src, 0, y, src.width, h, 0, 0, src.width, h);
+  return c;
+}
+
+/* Places a canvas on the PDF at full usable width. Starts a new page if it will not fit on the
+   current one, and slices blocks taller than a page across several pages. */
+function placeCanvas(doc, canvas, st) {
+  const mmPerPx = st.maxW / canvas.width;
+  const hMm = canvas.height * mmPerPx;
+  const usable = st.pageH - st.margin * 2;
+
+  if (hMm <= usable) {
+    if (st.y > st.margin && st.y + hMm > st.pageH - st.margin) {
+      doc.addPage();
+      st.y = st.margin;
+    }
+    doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', st.margin, st.y, st.maxW, hMm, undefined, 'FAST');
+    st.y += hMm + st.gap;
+    return;
+  }
+
+  if (st.y > st.margin) {
+    doc.addPage();
+    st.y = st.margin;
+  }
+  const slicePx = Math.floor(usable / mmPerPx);
+  for (let off = 0; off < canvas.height; off += slicePx) {
+    const h = Math.min(slicePx, canvas.height - off);
+    if (off > 0) {
+      doc.addPage();
+      st.y = st.margin;
+    }
+    const piece = cropCanvas(canvas, off, h);
+    const pieceMm = h * mmPerPx;
+    doc.addImage(piece.toDataURL('image/jpeg', 0.92), 'JPEG', st.margin, st.y, st.maxW, pieceMm, undefined, 'FAST');
+    st.y += pieceMm + st.gap;
+  }
+}
+
+function newPdf() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 8;
+  return { doc, st: { pageW, pageH, margin, maxW: pageW - margin * 2, y: margin, gap: 4 } };
+}
+
+$('dashPdfBtn').addEventListener('click', () => runExport('dashPdfBtn', 'Building PDF...', async () => {
+  await withoutZoom(async () => {
+    const canvas = await renderNodeToCanvas($('dashboardCanvasTarget'));
+    const { doc, st } = newPdf();
+    const maxH = st.pageH - st.margin * 2;
     const ratio = canvas.height / canvas.width;
-    let w = maxW, h = w * ratio;
+
+    // Fit on one page when that keeps the report reasonably large; otherwise paginate at full width
+    let w = st.maxW, h = w * ratio;
     if (h > maxH) { h = maxH; w = h / ratio; }
-    const x = (pageW - w) / 2;
-    const y = margin;
-    doc.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', x, y, w, h, undefined, 'MEDIUM');
-    const blob = doc.output('blob');
-    await saveBlob('NDMC_311_Dashboard_' + computed.reportDateStr + '.pdf', blob);
-    showMsg(genMsg, 'ok', 'Dashboard PDF generated and downloaded successfully.');
-  } catch (err) {
-    showMsg(genMsg, 'error', 'PDF: ' + downloadErrorText(err));
-    console.error(err);
-  } finally {
-    btn.disabled = false; btn.innerHTML = orig;
-  }
-});
+    if (w >= st.maxW * 0.75) {
+      const x = (st.pageW - w) / 2;
+      doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', x, st.margin, w, h, undefined, 'FAST');
+    } else {
+      placeCanvas(doc, canvas, st);
+    }
+    await saveBlob('NDMC_311_Dashboard_' + computed.reportDateStr + '.pdf', doc.output('blob'));
+  });
+}, 'Dashboard PDF generated and downloaded successfully.', 'PDF'));
 
-document.getElementById('offPdfBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('offPdfBtn');
-  const genMsg = document.getElementById('genMsg');
-  btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>Building PDF...';
-  try {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-    const margin = 8;
-    const maxW = pageW - margin * 2;
+$('offPdfBtn').addEventListener('click', () => runExport('offPdfBtn', 'Building PDF...', async (setLabel) => {
+  await withoutZoom(async () => {
+    const { doc, st } = newPdf();
+    // Render each department block on its own: avoids the browser's maximum-canvas-height limit
+    const els = [$('officerTitleBlock'), ...document.querySelectorAll('#officerRender [data-dept-block]')];
 
-    const container = document.getElementById('officerCanvasTarget');
-    const containerRect = container.getBoundingClientRect();
-    const segEls = [document.getElementById('officerTitleBlock'), ...document.querySelectorAll('[data-dept-block]')];
-    const segments = segEls.map(el => {
-      const r = el.getBoundingClientRect();
-      return { top: r.top - containerRect.top, height: r.height };
-    });
+    for (let i = 0; i < els.length; i++) {
+      setLabel(`Building PDF... ${i + 1}/${els.length}`);
+      const canvas = await renderNodeToCanvas(els[i]);
+      placeCanvas(doc, canvas, st);
+      await new Promise(r => setTimeout(r, 0)); // let the UI repaint between blocks
+    }
+    await saveBlob('NDMC_311_OfficerWise_' + computed.reportDateStr + '.pdf', doc.output('blob'));
+  });
+}, 'Officer-Wise PDF generated and downloaded successfully.', 'PDF'));
 
-    const fullCanvas = await renderNodeToCanvas(container);
-    const scaleFactor = fullCanvas.width / containerRect.width;
-    const mmPerPx = maxW / fullCanvas.width;
-    const gapMm = 4;
+$('excelBtn').addEventListener('click', () => runExport('excelBtn', 'Building Excel...', async () => {
+  const blob = await buildStyledExcelBlob();
+  await saveBlob('NDMC_311_Report_' + computed.reportDateStr + '.xlsx', blob);
+}, 'Excel report ready for download.', 'Excel'));
 
-    let curY = margin;
-    segments.forEach((seg, idx) => {
-      const segTopPx = Math.round(seg.top * scaleFactor);
-      const segHeightPx = Math.max(1, Math.round(seg.height * scaleFactor));
-      const segHmm = segHeightPx * mmPerPx;
+$('pivotExcelBtn').addEventListener('click', () => runExport('pivotExcelBtn', 'Building Excel...', async () => {
+  const blob = await buildOfficerPivotExcelBlob();
+  await saveBlob('Officer_Wise_Pending_List_' + computed.reportDateStr + '.xlsx', blob);
+}, 'Officer Pending List Excel ready.', 'Excel'));
 
-      if (idx > 0 && curY + segHmm > pageH - margin) {
-        doc.addPage();
-        curY = margin;
-      }
-
-      const cropCanvas = document.createElement('canvas');
-      cropCanvas.width = fullCanvas.width;
-      cropCanvas.height = segHeightPx;
-      cropCanvas.getContext('2d').drawImage(
-        fullCanvas, 0, segTopPx, fullCanvas.width, segHeightPx, 0, 0, fullCanvas.width, segHeightPx
-      );
-      doc.addImage(cropCanvas.toDataURL('image/jpeg', 0.9), 'JPEG', margin, curY, maxW, segHmm, undefined, 'MEDIUM');
-      curY += segHmm + gapMm;
-    });
-    const blob = doc.output('blob');
-    await saveBlob('NDMC_311_OfficerWise_' + computed.reportDateStr + '.pdf', blob);
-    showMsg(genMsg, 'ok', 'Officer-Wise PDF generated and downloaded successfully.');
-  } catch (err) {
-    showMsg(genMsg, 'error', 'PDF: ' + downloadErrorText(err));
-    console.error(err);
-  } finally {
-    btn.disabled = false; btn.innerHTML = orig;
-  }
-});
-
-document.getElementById('excelBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('excelBtn');
-  const genMsg = document.getElementById('genMsg');
-  btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>Building Excel...';
-  try {
-    const blob = await buildStyledExcelBlob();
-    await saveBlob('NDMC_311_Report_' + computed.reportDateStr + '.xlsx', blob);
-    showMsg(genMsg, 'ok', 'Excel report ready for download.');
-  } catch (err) {
-    showMsg(genMsg, 'error', 'Excel: ' + downloadErrorText(err));
-    console.error(err);
-  } finally {
-    btn.disabled = false; btn.innerHTML = orig;
-  }
-});
+/* ==========================================================================
+   Excel builders
+   ========================================================================== */
 
 async function buildStyledExcelBlob() {
   const { deptList, offByDept, grand, reportDateStr } = computed;
+  const depts = orderedDepts(deptList); // same order as previews / PDFs
   const wb = new ExcelJS.Workbook();
 
   const NAVY = 'FF1F4E78', NAVY_DARK = 'FF17365D', LIGHTBLUE = 'FFBDD7EE', GREEN = 'FF92D050', RED = 'FFFF0000';
@@ -624,7 +873,7 @@ async function buildStyledExcelBlob() {
 
   dash.mergeCells('A1:I1');
   const dTitle = dash.getCell('A1');
-  dTitle.value = '311 APP-PENDING COMPLAINTS \u2013 MANAGEMENT DASHBOARD';
+  dTitle.value = '311 APP-PENDING COMPLAINTS – MANAGEMENT DASHBOARD';
   dTitle.font = { ...WHITE_BOLD, size: 15 };
   centre(dTitle); fill(dTitle, NAVY);
   dash.getRow(1).height = 24;
@@ -657,14 +906,14 @@ async function buildStyledExcelBlob() {
   dwBar.value = 'DEPARTMENT-WISE PENDENCY'; dwBar.font = WHITE_BOLD; centre(dwBar); fill(dwBar, NAVY_DARK);
 
   const headRowNum = 9;
-  const headers = ['Department', 'Total Pending', 'Within SLA', 'Escalated', '0\u201315 Days', '16\u201330 Days', '31\u201345 Days', '46\u201390 Days', 'More than 90 Days'];
+  const headers = ['Department', 'Total Pending', 'Within SLA', 'Escalated', '0–15 Days', '16–30 Days', '31–45 Days', '46–90 Days', 'More than 90 Days'];
   headers.forEach((h, i) => {
     const c = dash.getCell(headRowNum, i + 1);
     c.value = h; c.font = WHITE_BOLD; centre(c, true); fill(c, NAVY_DARK); border(c);
   });
 
   let r = headRowNum + 1;
-  deptList.forEach(d => {
+  depts.forEach(d => {
     const rowVals = [d.name, d.total, d.withinSla, d.escalated, ...d.buckets];
     rowVals.forEach((v, i) => {
       const c = dash.getCell(r, i + 1);
@@ -694,8 +943,8 @@ async function buildStyledExcelBlob() {
   off.getRow(1).height = 24;
 
   let orow = 3;
-  const offHeaders = ['S.No.', 'Officer', 'Total Pending', '0\u201315 Days', '16\u201330 Days', '31\u201345 Days', '46\u201390 Days', 'More than 90 Days'];
-  deptList.forEach(d => {
+  const offHeaders = ['S.No.', 'Officer', 'Total Pending', '0–15 Days', '16–30 Days', '31–45 Days', '46–90 Days', 'More than 90 Days'];
+  depts.forEach(d => {
     off.mergeCells(`A${orow}:H${orow}`);
     const bar = off.getCell(orow, 1);
     bar.value = d.name; bar.font = WHITE_BOLD; bar.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }; fill(bar, NAVY); border(bar);
@@ -747,28 +996,12 @@ async function buildStyledExcelBlob() {
   return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
-/* Officer Pending List (pivot-style) Excel */
 function fmtDateTitleUpper(d) {
   const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
   return d.getDate() + ' ' + months[d.getMonth()] + ', ' + d.getFullYear();
 }
 
-document.getElementById('pivotExcelBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('pivotExcelBtn');
-  const genMsg = document.getElementById('genMsg');
-  btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>Building Excel...';
-  try {
-    const blob = await buildOfficerPivotExcelBlob();
-    await saveBlob('Officer_Wise_Pending_List_' + computed.reportDateStr + '.xlsx', blob);
-    showMsg(genMsg, 'ok', 'Officer Pending List Excel ready.');
-  } catch (err) {
-    showMsg(genMsg, 'error', 'Excel: ' + downloadErrorText(err));
-    console.error(err);
-  } finally {
-    btn.disabled = false; btn.innerHTML = orig;
-  }
-});
-
+/* Officer Pending List (pivot-style, alphabetical by design — mirrors an Excel pivot table) */
 async function buildOfficerPivotExcelBlob() {
   const { deptList, offByDept, grand, statusOrder, deptStatusAgg } = computed;
   const wb = new ExcelJS.Workbook();
@@ -820,7 +1053,6 @@ async function buildOfficerPivotExcelBlob() {
     const cg = s1.getCell(sr, s1LastCol); cg.value = d.total; cg.font = BLACK_BOLD; cg.alignment = { horizontal: 'center' }; border(cg);
     sr++;
   });
-  // Grand Total row
   const g0 = s1.getCell(sr, 1); g0.value = ''; fill(g0, YELLOW); border(g0);
   const g1 = s1.getCell(sr, 2); g1.value = 'Grand Total'; g1.font = BLACK_BOLD; fill(g1, YELLOW); border(g1);
   statusCols.forEach((st, i) => {
@@ -881,164 +1113,103 @@ async function buildOfficerPivotExcelBlob() {
 }
 
 /* ==========================================================================
-   Executive Summary Quick-Copy Action
-   ========================================================================== */
-
-function initCopySummary() {
-  const copyBtn = document.getElementById('copySummaryBtn');
-  if (!copyBtn) return;
-  copyBtn.addEventListener('click', async () => {
-    if (!computed) return;
-    const g = computed.grand;
-    const slaRate = g.total > 0 ? ((g.withinSla / g.total) * 100).toFixed(1) : '0';
-    let brief = `📊 NDMC 311 COMPLAINT PENDENCY EXECUTIVE BRIEF (${computed.reportDateStr})\n`;
-    brief += `========================================================\n`;
-    brief += `• Total Pending Complaints: ${g.total.toLocaleString()}\n`;
-    brief += `• Within SLA (Compliant):   ${g.withinSla.toLocaleString()} (${slaRate}%)\n`;
-    brief += `• Escalated / Overdue:      ${g.escalated.toLocaleString()} (${(100 - parseFloat(slaRate)).toFixed(1)}%)\n\n`;
-    brief += `⏳ AGING BREAKDOWN (Escalated):\n`;
-    brief += `  - 0-15 Days:        ${g.buckets[0]}\n`;
-    brief += `  - 16-30 Days:       ${g.buckets[1]}\n`;
-    brief += `  - 31-45 Days:       ${g.buckets[2]}\n`;
-    brief += `  - 46-90 Days:       ${g.buckets[3]}\n`;
-    brief += `  - More than 90 Days: ${g.buckets[4]}\n\n`;
-    brief += `🏛️ TOP DEPARTMENTS BY PENDENCY:\n`;
-    computed.deptList.slice(0, 5).forEach((d, i) => {
-      brief += `  ${i + 1}. ${d.name}: ${d.total} complaints (${d.withinSla} compliant, ${d.escalated} escalated)\n`;
-    });
-    brief += `========================================================\nGenerated via NDMC 311 Analytics Studio`;
-    
-    try {
-      await navigator.clipboard.writeText(brief);
-      showMsg(document.getElementById('genMsg'), 'ok', 'Executive brief copied to clipboard successfully!');
-    } catch (e) {
-      showMsg(document.getElementById('genMsg'), 'info', 'Summary ready. Please copy from prompt.');
-    }
-  });
-}
-
-/* ==========================================================================
-   Preview Zoom Controls
-   ========================================================================== */
-
-function initPreviewControls() {
-  const configs = [
-    { prefix: 'dash', targetId: 'dashboardRender' },
-    { prefix: 'off', targetId: 'officerRender' }
-  ];
-
-  configs.forEach(cfg => {
-    let currentZoom = 1.0;
-    const target = document.getElementById(cfg.targetId);
-    const zoomVal = document.getElementById(cfg.prefix + 'ZoomVal');
-    const zoomIn = document.getElementById(cfg.prefix + 'ZoomIn');
-    const zoomOut = document.getElementById(cfg.prefix + 'ZoomOut');
-    const zoomReset = document.getElementById(cfg.prefix + 'ZoomReset');
-
-    function applyZoom(z) {
-      currentZoom = Math.max(0.4, Math.min(2.0, z));
-      if (target) {
-        target.style.transform = `scale(${currentZoom})`;
-      }
-      if (zoomVal) {
-        zoomVal.textContent = Math.round(currentZoom * 100) + '%';
-      }
-    }
-
-    if (zoomIn) zoomIn.addEventListener('click', () => applyZoom(currentZoom + 0.15));
-    if (zoomOut) zoomOut.addEventListener('click', () => applyZoom(currentZoom - 0.15));
-    if (zoomReset) zoomReset.addEventListener('click', () => applyZoom(1.0));
-  });
-}
-
-/* ==========================================================================
-   Interactive Cursor Light & Glow Engine
+   Cursor spotlight, card sheen, click sparks
    ========================================================================== */
 
 function initCursorLighting() {
-  const spotlight = document.getElementById('cursorSpotlight');
-  const glow = document.getElementById('cursorGlow');
-  const dot = document.getElementById('cursorDot');
+  const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  if (REDUCED_MOTION || coarse) return;
 
-  let mouseX = window.innerWidth / 2;
-  let mouseY = window.innerHeight / 2;
-  let glowX = mouseX;
-  let glowY = mouseY;
-  let spotX = mouseX;
-  let spotY = mouseY;
+  const spotlight = $('cursorSpotlight');
+  let tx = window.innerWidth / 2, ty = window.innerHeight / 2;
+  let sx = tx, sy = ty, raf = 0;
+
+  function paint() {
+    if (spotlight) spotlight.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -50%)`;
+  }
+  paint();
+
+  // The loop only runs while the spotlight is still catching up with the cursor
+  function loop() {
+    sx += (tx - sx) * 0.12;
+    sy += (ty - sy) * 0.12;
+    paint();
+    if (Math.abs(tx - sx) > 0.5 || Math.abs(ty - sy) > 0.5) raf = requestAnimationFrame(loop);
+    else raf = 0;
+  }
 
   window.addEventListener('mousemove', e => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
+    tx = e.clientX; ty = e.clientY;
+    if (!raf) raf = requestAnimationFrame(loop);
+  }, { passive: true });
 
-    if (dot) {
-      dot.style.left = mouseX + 'px';
-      dot.style.top = mouseY + 'px';
-    }
-
-    // Dynamic specular coordinate for glass cards
-    document.documentElement.style.setProperty('--mouse-x', mouseX + 'px');
-    document.documentElement.style.setProperty('--mouse-y', mouseY + 'px');
-  });
-
-  // Smooth lerping loop for aura and spotlight
-  function loop() {
-    glowX += (mouseX - glowX) * 0.18;
-    glowY += (mouseY - glowY) * 0.18;
-    spotX += (mouseX - spotX) * 0.08;
-    spotY += (mouseY - spotY) * 0.08;
-
-    if (glow) {
-      glow.style.left = glowX + 'px';
-      glow.style.top = glowY + 'px';
-    }
-    if (spotlight) {
-      spotlight.style.left = spotX + 'px';
-      spotlight.style.top = spotY + 'px';
-    }
-    requestAnimationFrame(loop);
+  // Per-card, card-relative sheen coordinates (no page-wide style recalculation)
+  const area = document.querySelector('.workflow-container');
+  if (area) {
+    area.addEventListener('mousemove', e => {
+      const card = e.target.closest('.card');
+      if (!card) return;
+      const rect = card.getBoundingClientRect();
+      card.style.setProperty('--mouse-x', (e.clientX - rect.left) + 'px');
+      card.style.setProperty('--mouse-y', (e.clientY - rect.top) + 'px');
+    }, { passive: true });
   }
-  requestAnimationFrame(loop);
 
-  // Magnetic hover reaction on interactives
-  const interactiveSelectors = 'a, button, input, select, label, .card, .stat, .feature-chip, .hero-3d-container, .btn-export, .theme-toggle-btn';
-  document.addEventListener('mouseover', e => {
-    if (e.target.closest(interactiveSelectors)) {
-      glow && glow.classList.add('hovering');
-    }
-  });
-  document.addEventListener('mouseout', e => {
-    if (e.target.closest(interactiveSelectors)) {
-      glow && glow.classList.remove('hovering');
-    }
-  });
+  window.addEventListener('click', e => createClickSparks(e.clientX, e.clientY));
+}
 
-  // Click Spark Particle Generation
-  window.addEventListener('click', e => {
-    createClickSparks(e.clientX, e.clientY);
+/* Cards tilt toward the cursor (restored). Skipped on touch screens and reduced-motion. */
+function init3DTilt() {
+  const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  if (REDUCED_MOTION || coarse) return;
+
+  document.querySelectorAll('.tilt-card').forEach(card => {
+    let raf = 0, lastEvent = null;
+
+    function apply() {
+      raf = 0;
+      if (!lastEvent) return;
+      const rect = card.getBoundingClientRect();
+      const x = lastEvent.clientX - rect.left;
+      const y = lastEvent.clientY - rect.top;
+      const cx = rect.width / 2, cy = rect.height / 2;
+      const rotateX = ((y - cy) / cy) * -3.5;
+      const rotateY = ((x - cx) / cx) * 3.5;
+      card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-2px)`;
+    }
+
+    card.addEventListener('mousemove', e => {
+      lastEvent = e;
+      card.classList.add('tilting');
+      if (!raf) raf = requestAnimationFrame(apply);
+    }, { passive: true });
+
+    card.addEventListener('mouseleave', () => {
+      lastEvent = null;
+      card.classList.remove('tilting');
+      card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0px)';
+    });
   });
 }
 
 function createClickSparks(x, y) {
   const sparkColors = ['#3b82f6', '#6366f1', '#06b6d4', '#10b981', '#f43f5e', '#a855f7'];
-  const count = 10;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < 10; i++) {
     const spark = document.createElement('div');
     spark.className = 'cursor-spark';
     const size = Math.random() * 6 + 3;
+    const color = sparkColors[Math.floor(Math.random() * sparkColors.length)];
     spark.style.width = size + 'px';
     spark.style.height = size + 'px';
     spark.style.left = x + 'px';
     spark.style.top = y + 'px';
-    spark.style.backgroundColor = sparkColors[Math.floor(Math.random() * sparkColors.length)];
-    spark.style.boxShadow = `0 0 10px ${spark.style.backgroundColor}`;
-    
+    spark.style.backgroundColor = color;
+    spark.style.boxShadow = `0 0 10px ${color}`;
+
     const angle = Math.random() * Math.PI * 2;
     const dist = Math.random() * 55 + 25;
-    const dx = Math.cos(angle) * dist + 'px';
-    const dy = Math.sin(angle) * dist + 'px';
-    spark.style.setProperty('--dx', dx);
-    spark.style.setProperty('--dy', dy);
+    spark.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+    spark.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
 
     document.body.appendChild(spark);
     setTimeout(() => spark.remove(), 600);
@@ -1046,44 +1217,51 @@ function createClickSparks(x, y) {
 }
 
 /* ==========================================================================
-   Theme Switcher (Dark / Light Mode)
+   Theme
    ========================================================================== */
 
 function initThemeToggle() {
-  const themeBtn = document.getElementById('themeToggleBtn');
+  const themeBtn = $('themeToggleBtn');
   if (!themeBtn) return;
-  
-  const savedTheme = localStorage.getItem('ndmc_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  document.documentElement.setAttribute('data-theme', savedTheme);
+
+  // The inline <head> script already applied the saved theme before first paint
+  const current = () => document.documentElement.getAttribute('data-theme') || 'light';
+  themeBtn.setAttribute('aria-pressed', current() === 'dark' ? 'true' : 'false');
 
   themeBtn.addEventListener('click', () => {
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('ndmc_theme', newTheme);
+    const next = current() === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    themeBtn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
+    safeStorageSet('ndmc_theme', next);
   });
 }
 
 /* ==========================================================================
-   Interactive 3D Hero Scene (Three.js)
+   3D hero (Three.js) — paused off-screen / in background tabs, optional if WebGL fails
    ========================================================================== */
 
 function initHero3D() {
-  const container = document.getElementById('hero3dContainer');
-  const canvas = document.getElementById('hero3dCanvas');
+  const container = $('hero3dContainer');
+  const canvas = $('hero3dCanvas');
   if (!container || !canvas || typeof THREE === 'undefined') return;
+  if (container.clientWidth === 0 || container.clientHeight === 0) return; // hidden on small screens
+
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  } catch (e) {
+    container.style.display = 'none';
+    return;
+  }
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-  camera.position.z = 6;
+  camera.position.z = 6.4;
 
-  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  // Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
-  scene.add(ambientLight);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 
   const dirLight1 = new THREE.DirectionalLight(0x6366f1, 1.4);
   dirLight1.position.set(4, 5, 4);
@@ -1097,202 +1275,162 @@ function initHero3D() {
   pointLight.position.set(0, 2, 3);
   scene.add(pointLight);
 
-  // Group for full 3D object
   const heroGroup = new THREE.Group();
   scene.add(heroGroup);
 
-  // Central Crystal Icosahedron
-  const icoGeo = new THREE.IcosahedronGeometry(1.6, 0);
-  const icoMat = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff,
-    emissive: 0x3b82f6,
-    emissiveIntensity: 0.2,
-    roughness: 0.1,
-    metalness: 0.1,
-    transmission: 0.75,
-    ior: 1.55,
-    thickness: 1.6,
-    transparent: true,
-    opacity: 0.94,
-    wireframe: false
-  });
-  const icoMesh = new THREE.Mesh(icoGeo, icoMat);
+  const icoMesh = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.5, 0),
+    new THREE.MeshPhysicalMaterial({
+      color: 0xffffff, emissive: 0x3b82f6, emissiveIntensity: 0.2,
+      roughness: 0.1, metalness: 0.1, transmission: 0.75, ior: 1.55, thickness: 1.6,
+      transparent: true, opacity: 0.94
+    })
+  );
   heroGroup.add(icoMesh);
 
-  // Wireframe Cage overlay
-  const wireMat = new THREE.MeshBasicMaterial({
-    color: 0x6366f1,
-    wireframe: true,
-    transparent: true,
-    opacity: 0.4
-  });
-  const wireMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1.62, 0), wireMat);
+  const wireMesh = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.52, 0),
+    new THREE.MeshBasicMaterial({ color: 0x6366f1, wireframe: true, transparent: true, opacity: 0.4 })
+  );
   heroGroup.add(wireMesh);
 
-  // Orbital Rings
-  const ringGeo1 = new THREE.TorusGeometry(2.3, 0.035, 16, 100);
-  const ringMat1 = new THREE.MeshStandardMaterial({
-    color: 0x6366f1,
-    roughness: 0.2,
-    metalness: 0.85,
-    emissive: 0x3b82f6,
-    emissiveIntensity: 0.25
-  });
-  const ring1 = new THREE.Mesh(ringGeo1, ringMat1);
+  const ring1 = new THREE.Mesh(
+    new THREE.TorusGeometry(2.2, 0.035, 16, 100),
+    new THREE.MeshStandardMaterial({ color: 0x6366f1, roughness: 0.2, metalness: 0.85, emissive: 0x3b82f6, emissiveIntensity: 0.25 })
+  );
   ring1.rotation.x = Math.PI / 3;
   heroGroup.add(ring1);
 
-  const ringGeo2 = new THREE.TorusGeometry(2.6, 0.025, 16, 100);
-  const ringMat2 = new THREE.MeshStandardMaterial({
-    color: 0x06b6d4,
-    roughness: 0.2,
-    metalness: 0.85,
-    emissive: 0x06b6d4,
-    emissiveIntensity: 0.25
-  });
-  const ring2 = new THREE.Mesh(ringGeo2, ringMat2);
+  const ring2 = new THREE.Mesh(
+    new THREE.TorusGeometry(2.5, 0.025, 16, 100),
+    new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.2, metalness: 0.85, emissive: 0x06b6d4, emissiveIntensity: 0.25 })
+  );
   ring2.rotation.y = Math.PI / 4;
   ring2.rotation.x = -Math.PI / 6;
   heroGroup.add(ring2);
 
-  // Floating particles / data nodes
-  const particleCount = 45;
   const particleGeo = new THREE.SphereGeometry(0.05, 8, 8);
-  const particleMat = new THREE.MeshStandardMaterial({
-    color: 0x8b5cf6,
-    roughness: 0.3,
-    metalness: 0.7,
-    emissive: 0x6366f1,
-    emissiveIntensity: 0.6
-  });
-  
+  const particleMat = new THREE.MeshStandardMaterial({ color: 0x8b5cf6, roughness: 0.3, metalness: 0.7, emissive: 0x6366f1, emissiveIntensity: 0.6 });
   const particles = [];
-  for (let i = 0; i < particleCount; i++) {
-    const pMesh = new THREE.Mesh(particleGeo, particleMat);
-    const radius = 2.0 + Math.random() * 1.5;
+  for (let i = 0; i < 40; i++) {
+    const p = new THREE.Mesh(particleGeo, particleMat);
+    const radius = 2.0 + Math.random() * 1.4;
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(Math.random() * 2 - 1);
-    
-    pMesh.position.x = radius * Math.sin(phi) * Math.cos(theta);
-    pMesh.position.y = radius * Math.sin(phi) * Math.sin(theta);
-    pMesh.position.z = radius * Math.cos(phi);
-    
-    pMesh.userData = {
-      basePos: pMesh.position.clone(),
-      speed: 0.005 + Math.random() * 0.015,
-      offset: Math.random() * Math.PI * 2
-    };
-    heroGroup.add(pMesh);
-    particles.push(pMesh);
+    p.position.set(radius * Math.sin(phi) * Math.cos(theta), radius * Math.sin(phi) * Math.sin(theta), radius * Math.cos(phi));
+    p.userData = { baseY: p.position.y, speed: 0.005 + Math.random() * 0.015, offset: Math.random() * Math.PI * 2 };
+    heroGroup.add(p);
+    particles.push(p);
   }
 
-  // Interactive Mouse Parallax
-  let targetRotX = 0;
-  let targetRotY = 0;
-  let mouseX = 0;
-  let mouseY = 0;
+  let targetRotX = 0, targetRotY = 0;
 
-  function onMouseMove(e) {
+  function aim(clientX, clientY) {
     const rect = container.getBoundingClientRect();
-    const x = e.clientX - rect.left - rect.width / 2;
-    const y = e.clientY - rect.top - rect.height / 2;
-    mouseX = (x / (rect.width / 2));
-    mouseY = (y / (rect.height / 2));
-    targetRotY = mouseX * 0.8;
-    targetRotX = mouseY * 0.8;
+    targetRotY = ((clientX - rect.left - rect.width / 2) / (rect.width / 2)) * 0.8;
+    targetRotX = ((clientY - rect.top - rect.height / 2) / (rect.height / 2)) * 0.8;
   }
 
-  container.addEventListener('mousemove', onMouseMove);
-  container.addEventListener('mouseleave', () => {
-    targetRotX = 0;
-    targetRotY = 0;
-  });
-
-  // Touch Support
-  container.addEventListener('touchmove', (e) => {
-    if (e.touches.length > 0) {
-      const rect = container.getBoundingClientRect();
-      const x = e.touches[0].clientX - rect.left - rect.width / 2;
-      const y = e.touches[0].clientY - rect.top - rect.height / 2;
-      targetRotY = (x / (rect.width / 2)) * 0.8;
-      targetRotX = (y / (rect.height / 2)) * 0.8;
-    }
+  container.addEventListener('mousemove', e => aim(e.clientX, e.clientY));
+  container.addEventListener('mouseleave', () => { targetRotX = 0; targetRotY = 0; });
+  container.addEventListener('touchmove', e => {
+    if (e.touches.length) aim(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive: true });
 
-  // Render loop
-  let clock = new THREE.Clock();
+  const clock = new THREE.Clock();
 
-  function animate() {
-    requestAnimationFrame(animate);
-    const elapsedTime = clock.getElapsedTime();
-
-    // Constant smooth floating & self-rotation
-    heroGroup.position.y = Math.sin(elapsedTime * 1.2) * 0.12;
-    icoMesh.rotation.y += 0.006;
-    icoMesh.rotation.x += 0.004;
-    wireMesh.rotation.y += 0.006;
-    wireMesh.rotation.x += 0.004;
-
+  function renderFrame() {
+    const t = clock.getElapsedTime();
+    heroGroup.position.y = Math.sin(t * 1.2) * 0.12;
+    icoMesh.rotation.y += 0.006; icoMesh.rotation.x += 0.004;
+    wireMesh.rotation.y += 0.006; wireMesh.rotation.x += 0.004;
     ring1.rotation.z += 0.008;
     ring2.rotation.z -= 0.006;
-
-    // Orbit particles
     particles.forEach(p => {
-      p.position.y = p.userData.basePos.y + Math.sin(elapsedTime * 2 + p.userData.offset) * 0.15;
+      p.position.y = p.userData.baseY + Math.sin(t * 2 + p.userData.offset) * 0.15;
       p.rotation.y += p.userData.speed;
     });
-
-    // Mouse Damping Interpolation
     heroGroup.rotation.y += (targetRotY - heroGroup.rotation.y) * 0.05;
     heroGroup.rotation.x += (targetRotX - heroGroup.rotation.x) * 0.05;
-
     renderer.render(scene, camera);
   }
-  animate();
 
-  // Resize Handler
-  function handleResize() {
-    if (!container) return;
-    const width = container.clientWidth;
-    const height = container.clientHeight;
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
+  // Reduced motion: draw a single static frame
+  if (REDUCED_MOTION) { renderFrame(); return; }
+
+  let running = false, rafId = 0, onScreen = true;
+
+  function loop() {
+    if (!running) return;
+    rafId = requestAnimationFrame(loop);
+    renderFrame();
   }
-  window.addEventListener('resize', handleResize);
+  function start() { if (!running && onScreen && !document.hidden) { running = true; loop(); } }
+  function stop() { running = false; cancelAnimationFrame(rafId); }
+
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(entries => {
+      onScreen = entries[0].isIntersecting;
+      onScreen ? start() : stop();
+    }, { threshold: 0.05 }).observe(container);
+  }
+  document.addEventListener('visibilitychange', () => { document.hidden ? stop() : start(); });
+  start();
+
+  window.addEventListener('resize', () => {
+    const w = container.clientWidth, h = container.clientHeight;
+    if (!w || !h) return;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  });
 }
 
 /* ==========================================================================
-   3D Card Tilt Micro-Interactions
+   Init — each step is isolated so one failure cannot break the rest
    ========================================================================== */
 
-function init3DTilt() {
-  const cards = document.querySelectorAll('.tilt-card');
-  cards.forEach(card => {
-    card.addEventListener('mousemove', e => {
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      const rotateX = ((y - centerY) / centerY) * -3.5;
-      const rotateY = ((x - centerX) / centerX) * 3.5;
-
-      card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-2px)`;
-    });
-
-    card.addEventListener('mouseleave', () => {
-      card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0px)';
-    });
-  });
+function safeInit(fn, label) {
+  try { fn(); } catch (err) { console.warn('Init step failed (' + label + '):', err); }
 }
 
-// Initialize on DOM Ready
+function checkLibraries() {
+  const missing = [];
+  if (typeof XLSX === 'undefined') missing.push('Excel reader (SheetJS)');
+  if (typeof ExcelJS === 'undefined') missing.push('Excel writer (ExcelJS)');
+  if (!window.jspdf) missing.push('PDF builder (jsPDF)');
+  if (typeof html2canvas === 'undefined') missing.push('html2canvas');
+  if (missing.length) {
+    showMsg(uploadMsg, 'error',
+      'Some required libraries did not load (' + missing.join(', ') + '). Check your internet connection or network restrictions, then reload the page.');
+  }
+}
+
+function setDefaultDate() {
+  reportDateInput.value = localDateInputValue(new Date());
+}
+
+function applyTouchHint() {
+  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+    const hintLine = dropZone.querySelector('.drop-primary-text');
+    if (hintLine) hintLine.textContent = 'Tap here to select your complaint Excel';
+  }
+}
+
+// Disabled nav links should not navigate
+document.addEventListener('click', e => {
+  const link = e.target.closest && e.target.closest('.nav-link.is-disabled');
+  if (link) e.preventDefault();
+});
+
 document.addEventListener('DOMContentLoaded', () => {
-  initCursorLighting();
-  initThemeToggle();
-  initCopySummary();
-  initPreviewControls();
-  initHero3D();
-  init3DTilt();
+  safeInit(setDefaultDate, 'default date');
+  safeInit(applyTouchHint, 'touch hint');
+  safeInit(checkLibraries, 'library check');
+  safeInit(initThemeToggle, 'theme');
+  safeInit(initPreviewControls, 'preview controls');
+  safeInit(refreshNav, 'nav');
+  safeInit(initCursorLighting, 'cursor lighting');
+  safeInit(init3DTilt, 'card tilt');
+  safeInit(initHero3D, '3D hero');
 });
