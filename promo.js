@@ -9,12 +9,12 @@
 (function () {
   'use strict';
 
-  var BASE_MONTHLY = 500;
+  var BASE_MONTHLY = 199;
 
   var PLANS = [
-    { id: 'monthly', name: '1 Month', months: 1, price: 500, tag: '', paymentUrl: '' },
-    { id: 'half', name: '6 Months', months: 6, price: 2500, tag: 'Most popular', featured: true, paymentUrl: '' },
-    { id: 'yearly', name: '1 Year', months: 12, price: 5000, tag: 'Best savings', paymentUrl: '' }
+    { id: 'monthly', name: '1 Month', months: 1, price: 199, tag: '', paymentUrl: '' },
+    { id: 'half', name: '6 Months', months: 6, price: 999, tag: 'Most popular', featured: true, paymentUrl: '' },
+    { id: 'yearly', name: '1 Year', months: 12, price: 1999, tag: 'Best savings', paymentUrl: '' }
   ];
 
   var FEATURES = [

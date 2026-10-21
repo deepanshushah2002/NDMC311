@@ -1631,9 +1631,19 @@ table.rpt-table th {
 }
 
 .over-90-highlight {
-  background: #fee2e2 !important;
-  color: #9f1239 !important;
+  background: #b91c1c !important;
+  color: #ffffff !important;
   font-weight: 700;
+}
+
+.over-90-row > td:not(.lightblue):not(.green):not(.red) {
+  background: #fee2e2 !important;
+  color: #7f1d1d !important;
+}
+
+.over-90-row > td.over-90-highlight {
+  background: #b91c1c !important;
+  color: #ffffff !important;
 }
 
 .col-head {

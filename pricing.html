@@ -301,6 +301,23 @@
     var REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     function $(id) { return document.getElementById(id); }
 
+    function animatePrice(el, target) {
+      if (REDUCED_MOTION) {
+        el.textContent = P.rupees(target);
+        return;
+      }
+      var start = performance.now();
+      var duration = 900;
+      function frame(now) {
+        var progress = Math.min((now - start) / duration, 1);
+        var eased = 1 - Math.pow(1 - progress, 3);
+        el.textContent = P.rupees(Math.round(target * eased));
+        if (progress < 1) requestAnimationFrame(frame);
+        else el.textContent = P.rupees(target);
+      }
+      requestAnimationFrame(frame);
+    }
+
     /* ---------- Plan cards (data comes from promo.js) ---------- */
     function renderPlans() {
       var grid = $('plans');
@@ -316,11 +333,12 @@
         card.innerHTML =
           '<span class="plan-tag' + (p.tag ? '' : ' is-empty') + '">' + (p.tag || 'Flexible') + '</span>' +
           '<h2 class="plan-name">' + p.name + '</h2>' +
-          '<div class="plan-price"><span class="amount">' + P.rupees(p.price) + '</span><span class="per">' + P.periodLabel(p) + '</span></div>' +
+          '<div class="plan-price"><span class="amount" aria-label="' + P.rupees(p.price) + '"></span><span class="per">' + P.periodLabel(p) + '</span></div>' +
           '<p class="plan-meta">' + meta + '</p>' +
           '<ul class="plan-features">' + P.FEATURES.map(function (f) { return '<li>' + f + '</li>'; }).join('') + '</ul>' +
           '<button class="btn ' + (p.featured ? 'btn-primary' : 'btn-outline') + '" type="button" data-plan="' + p.id + '">Choose ' + p.name + '</button>';
         grid.appendChild(card);
+        animatePrice(card.querySelector('.amount'), p.price);
       });
     }
 

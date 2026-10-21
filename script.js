@@ -383,7 +383,9 @@ function generateReport() {
       totalRows++;
       if (!deptAgg[dept]) deptAgg[dept] = { total: 0, escalated: 0, buckets: [0, 0, 0, 0, 0] };
       deptAgg[dept].total++;
-      if (isEsc) { deptAgg[dept].escalated++; deptAgg[dept].buckets[b]++; }
+      if (isEsc) deptAgg[dept].escalated++;
+      // Dashboard aging buckets must reconcile to Total Pending, just like the officer report.
+      deptAgg[dept].buckets[b]++;
 
       const key = dept + '||' + officer;
       if (!offAgg[key]) offAgg[key] = { dept, officer, total: 0, buckets: [0, 0, 0, 0, 0], mobile: '' };
@@ -524,7 +526,7 @@ function renderSummary() {
 function renderDashboard() {
   const { deptList, grand, reportDateStr } = computed;
   const rows = orderedDepts(deptList).map(d => `
-    <tr>
+    <tr class="${d.buckets[4] > 0 ? 'over-90-row' : ''}">
       <td class="dept-name-cell">${escapeHtml(d.name)}</td>
       <td class="lightblue">${d.total}</td>
       <td class="green">${d.withinSla}</td>
@@ -854,6 +856,7 @@ async function buildStyledExcelBlob() {
   const wb = new ExcelJS.Workbook();
 
   const NAVY = 'FF1F4E78', NAVY_DARK = 'FF17365D', LIGHTBLUE = 'FFBDD7EE', GREEN = 'FF92D050', RED = 'FFFF0000';
+  const LIGHT_RED = 'FFFEE2E2', DARK_RED = 'FFB91C1C';
   const WHITE_BOLD = { bold: true, color: { argb: 'FFFFFFFF' } };
   const NAVYTXT_BOLD = { bold: true, color: { argb: 'FF12324F' } };
   const GREENTXT_BOLD = { bold: true, color: { argb: 'FF1C3D00' } };
@@ -923,6 +926,8 @@ async function buildStyledExcelBlob() {
       if (i === 1) { fill(c, LIGHTBLUE); c.font = NAVYTXT_BOLD; }
       else if (i === 2) { fill(c, GREEN); c.font = GREENTXT_BOLD; }
       else if (i === 3) { fill(c, RED); c.font = REDTXT_BOLD; }
+      else if (i === 8 && d.buckets[4] >= 1) { fill(c, DARK_RED); c.font = REDTXT_BOLD; }
+      else if (d.buckets[4] >= 1) { fill(c, LIGHT_RED); c.font = { bold: true, color: { argb: 'FF7F1D1D' } }; }
     });
     r++;
   });
