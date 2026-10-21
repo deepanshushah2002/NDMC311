@@ -187,7 +187,7 @@
       injectStyles();
       buildDom();
       // Shown on EVERY load / refresh of the main page — never on the pricing page itself
-      if (!ON_PRICING_PAGE) setTimeout(openModal, 400);
+      // if (!ON_PRICING_PAGE) setTimeout(openModal, 400);
     } catch (err) {
       console.warn('Pricing popup failed to start:', err);
     }
