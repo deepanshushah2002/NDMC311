@@ -1,11 +1,3 @@
-/* ==========================================================================
-   NDMC 311 — shared pricing data + "plans" popup
-   Used by index.html (main tool) and pricing.html.
-   The popup opens on EVERY page load / refresh (nothing is remembered).
-
-   To take payments: paste a payment link into `paymentUrl` for each plan
-   (Razorpay / Cashfree payment link, UPI link, Google Form, WhatsApp, etc.)
-   ========================================================================== */
 (function () {
   'use strict';
 
