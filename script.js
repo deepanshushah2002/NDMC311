@@ -1502,7 +1502,7 @@ function initUIStyleToggle() {
   function sync() {
     if (cartoon) root.setAttribute('data-ui-style', 'cartoon');
     else root.removeAttribute('data-ui-style');
-    button.textContent = cartoon ? '↩ Classic UI' : '🦖 Fun UI';
+    button.textContent = cartoon ? '😎 Classic UI' : '🦖 Fun UI';
     button.setAttribute('aria-pressed', cartoon ? 'true' : 'false');
     button.title = cartoon ? 'Switch back to classic design' : 'Switch to cartoon design';
   }
