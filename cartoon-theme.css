@@ -494,6 +494,15 @@ html[data-ui-style="cartoon"] .runner-six {
   animation-delay: -14s;
 }
 
+/* Give every added background character its own travel lane. */
+html[data-ui-style="cartoon"] .runner-seven { top: 15%; animation-duration: 36s; animation-delay: -6s; }
+html[data-ui-style="cartoon"] .runner-eight { top: 30%; animation-duration: 43s; animation-delay: -19s; }
+html[data-ui-style="cartoon"] .runner-nine { top: 47%; animation-duration: 37s; animation-delay: -27s; }
+html[data-ui-style="cartoon"] .runner-ten { top: 62%; animation-duration: 40s; animation-delay: -11s; }
+html[data-ui-style="cartoon"] .runner-eleven { top: 76%; animation-duration: 35s; animation-delay: -22s; }
+html[data-ui-style="cartoon"] .runner-twelve { top: 92%; animation-duration: 42s; animation-delay: -15s; }
+html[data-ui-style="cartoon"] .runner-thirteen { top: 4%; animation-duration: 39s; animation-delay: -31s; }
+
 /* Classic dark-mode style switch contrast */
 html[data-theme="dark"]:not([data-ui-style="cartoon"]) .ui-style-toggle-btn {
   background: #28283b;
@@ -525,8 +534,9 @@ html[data-ui-style="cartoon"] .card-cartoon-critter {
 }
 
 html[data-ui-style="cartoon"] .hanging-monkey {
-  top: 40px;
-  right: -23px;
+  top: -17px;
+  right: -8px;
+  font-size: 49px;
   transform-origin: 50% 0;
   animation: monkeySwing 2.7s ease-in-out infinite;
 }

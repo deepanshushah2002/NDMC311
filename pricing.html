@@ -14,6 +14,7 @@
         var t = localStorage.getItem('ndmc_theme');
         if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', t);
+        if (localStorage.getItem('ndmc_ui_style') === 'cartoon') document.documentElement.setAttribute('data-ui-style', 'cartoon');
       } catch (e) { }
     })();
   </script>
@@ -24,6 +25,7 @@
 
   <!-- Same theme as the main tool -->
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="cartoon-theme.css">
 
   <style>
     /* ---------- Pricing page ---------- */
@@ -205,6 +207,18 @@
       gap: 6px;
     }
 
+    /* Temporary theme reveal overlay; does not affect page layout or controls. */
+    .theme-transition { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; overflow: hidden; clip-path: circle(0 at 50% 100%); transition: clip-path 900ms cubic-bezier(.2,.75,.25,1), opacity 350ms ease; }
+    .theme-transition-dark { background: radial-gradient(ellipse at 50% 100%, #15264c 0%, #081329 60%, #030816 100%); }
+    .theme-transition-light { background: radial-gradient(ellipse at 50% 100%, #fff4c2 0%, #f6c85f 48%, #e99a35 100%); }
+    .theme-transition.is-expanding { clip-path: circle(150vmax at 50% 100%); }
+    .theme-transition.is-fading { opacity: 0; }
+    .theme-transition-dark::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(1.5px 1.5px at 16% 25%, #fff 98%, transparent), radial-gradient(1px 1px at 77% 19%, #cce3ff 98%, transparent), radial-gradient(1.5px 1.5px at 66% 52%, #fff 98%, transparent), radial-gradient(1px 1px at 30% 67%, #d5e6ff 98%, transparent), radial-gradient(1px 1px at 88% 74%, #fff 98%, transparent); }
+    .theme-transition-orb { position: absolute; left: 50%; bottom: 5vh; width: clamp(58px, 9vw, 96px); aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, 100px); opacity: 0; animation: theme-orb-rise 900ms cubic-bezier(.2,.75,.25,1) forwards; }
+    .theme-transition-dark .theme-transition-orb { background: radial-gradient(circle at 38% 36%, #fff 0 18%, #d9e8ff 48%, #91b8ff 72%, transparent 74%); box-shadow: 0 0 35px 10px #a9c9ff99; -webkit-mask: radial-gradient(circle at 65% 35%, transparent 0 38%, #000 41%); mask: radial-gradient(circle at 65% 35%, transparent 0 38%, #000 41%); }
+    .theme-transition-light .theme-transition-orb { background: radial-gradient(circle, #fffce3 0 30%, #ffe17b 58%, #ffb42e 75%); box-shadow: 0 0 50px 20px #ffd665aa; }
+    @keyframes theme-orb-rise { 20% { opacity: 1; } 100% { opacity: 1; transform: translate(-50%, 0); } }
+
     @media (max-width: 900px) {
       .plans-grid {
         grid-template-columns: 1fr;
@@ -227,6 +241,19 @@
     <div class="bg-orb orb-2"></div>
     <div class="bg-orb orb-3"></div>
     <div class="bg-grid"></div>
+    <span class="bg-cartoon-runner runner-one" aria-hidden="true">🏃🏻‍♂️</span>
+    <span class="bg-cartoon-runner runner-two" aria-hidden="true">🐕</span>
+    <span class="bg-cartoon-runner runner-three" aria-hidden="true">🐈</span>
+    <span class="bg-cartoon-runner runner-four" aria-hidden="true">🦆</span>
+    <span class="bg-cartoon-runner runner-five" aria-hidden="true">🛸</span>
+    <span class="bg-cartoon-runner runner-six" aria-hidden="true">🐒</span>
+    <span class="bg-cartoon-runner runner-seven" aria-hidden="true">🐢</span>
+    <span class="bg-cartoon-runner runner-eight" aria-hidden="true">🐑</span>
+    <span class="bg-cartoon-runner runner-nine" aria-hidden="true">🐅</span>
+    <span class="bg-cartoon-runner runner-ten" aria-hidden="true">🦌</span>
+    <span class="bg-cartoon-runner runner-eleven" aria-hidden="true">🦖</span>
+    <span class="bg-cartoon-runner runner-twelve" aria-hidden="true">🐳</span>
+    <span class="bg-cartoon-runner runner-thirteen" aria-hidden="true">🐼</span>
   </div>
 
   <header class="navbar-wrapper">
@@ -257,6 +284,7 @@
       </div>
 
       <div class="nav-actions">
+        <button class="ui-style-toggle-btn" id="uiStyleToggleBtn" type="button" aria-pressed="false" title="Switch to cartoon design">🦖 Fun UI</button>
         <button class="theme-toggle-btn" id="themeToggleBtn" type="button" title="Toggle Dark/Light Mode" aria-label="Toggle theme">
           <span class="theme-icon sun-icon" aria-hidden="true">☀️</span>
           <span class="theme-icon moon-icon" aria-hidden="true">🌙</span>
@@ -346,12 +374,75 @@
     function initTheme() {
       var btn = $('themeToggleBtn');
       var cur = function () { return document.documentElement.getAttribute('data-theme') || 'light'; };
+      var transitionPending = false;
       btn.setAttribute('aria-pressed', cur() === 'dark' ? 'true' : 'false');
+      function transitionTheme(next, applyTheme) {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return applyTheme();
+        var overlay = document.createElement('div');
+        overlay.className = 'theme-transition theme-transition-' + next;
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.innerHTML = '<span class="theme-transition-orb"></span>';
+        document.body.appendChild(overlay);
+        requestAnimationFrame(function () { overlay.classList.add('is-expanding'); });
+        window.setTimeout(function () {
+          applyTheme(); overlay.classList.add('is-fading');
+          window.setTimeout(function () { overlay.remove(); }, 380);
+        }, 900);
+      }
       btn.addEventListener('click', function () {
+        if (transitionPending) return;
+        transitionPending = true;
         var next = cur() === 'dark' ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', next);
-        btn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
-        try { localStorage.setItem('ndmc_theme', next); } catch (e) { }
+        transitionTheme(next, function () {
+          document.documentElement.setAttribute('data-theme', next);
+          btn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
+          try { localStorage.setItem('ndmc_theme', next); } catch (e) { }
+          transitionPending = false;
+        });
+      });
+    }
+
+    function initUIStyle() {
+      var btn = $('uiStyleToggleBtn');
+      var cartoon = false;
+      try { cartoon = localStorage.getItem('ndmc_ui_style') === 'cartoon'; } catch (e) { }
+      function sync() {
+        if (cartoon) document.documentElement.setAttribute('data-ui-style', 'cartoon');
+        else document.documentElement.removeAttribute('data-ui-style');
+        btn.textContent = cartoon ? '↩ Classic UI' : '🦖 Fun UI';
+        btn.setAttribute('aria-pressed', cartoon ? 'true' : 'false');
+        btn.title = cartoon ? 'Switch back to classic design' : 'Switch to cartoon design';
+      }
+      btn.addEventListener('click', function () {
+        cartoon = !cartoon;
+        try { localStorage.setItem('ndmc_ui_style', cartoon ? 'cartoon' : 'classic'); } catch (e) { }
+        sync();
+      });
+      sync();
+    }
+
+    function initRandomBackgroundCharacters() {
+      var faces = ['🏃🏻‍♂️', '🐕', '🐈', '🦆', '🛸', '🐒', '🐢', '🐑', '🐅', '🦌', '🦖', '🐳', '🐼'];
+      document.querySelectorAll('.bg-cartoon-runner').forEach(function (character) {
+        function pickDifferent() {
+          var choices = faces.filter(function (face) { return face !== character.textContent.trim(); });
+          character.textContent = choices[Math.floor(Math.random() * choices.length)];
+        }
+        pickDifferent();
+        character.addEventListener('animationiteration', pickDifferent);
+      });
+    }
+
+    function initCardCritters() {
+      document.querySelectorAll('.card').forEach(function (card) {
+        if (card.querySelector('.card-cartoon-critter')) return;
+        [['hanging-monkey', '🐒'], ['perched-bird bird-one', '🐦'], ['perched-bird bird-two', '🐤']].forEach(function (item) {
+          var critter = document.createElement('span');
+          critter.className = 'card-cartoon-critter ' + item[0];
+          critter.setAttribute('aria-hidden', 'true');
+          critter.textContent = item[1];
+          card.appendChild(critter);
+        });
       });
     }
 
@@ -398,6 +489,9 @@
 
     renderPlans();
     initTheme();
+    initUIStyle();
+    initRandomBackgroundCharacters();
+    initCardCritters();
     initEffects();
   </script>
 </body>

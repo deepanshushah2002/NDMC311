@@ -1231,13 +1231,34 @@ function initThemeToggle() {
 
   // The inline <head> script already applied the saved theme before first paint
   const current = () => document.documentElement.getAttribute('data-theme') || 'light';
+  let transitionPending = false;
   themeBtn.setAttribute('aria-pressed', current() === 'dark' ? 'true' : 'false');
 
+  const transitionTheme = (next, applyTheme) => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return applyTheme();
+    const overlay = document.createElement('div');
+    overlay.className = `theme-transition theme-transition-${next}`;
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.innerHTML = '<span class="theme-transition-orb"></span>';
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('is-expanding'));
+    window.setTimeout(() => {
+      applyTheme();
+      overlay.classList.add('is-fading');
+      window.setTimeout(() => overlay.remove(), 380);
+    }, 900);
+  };
+
   themeBtn.addEventListener('click', () => {
+    if (transitionPending) return;
+    transitionPending = true;
     const next = current() === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    themeBtn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
-    safeStorageSet('ndmc_theme', next);
+    transitionTheme(next, () => {
+      document.documentElement.setAttribute('data-theme', next);
+      themeBtn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
+      safeStorageSet('ndmc_theme', next);
+      transitionPending = false;
+    });
   });
 }
 
