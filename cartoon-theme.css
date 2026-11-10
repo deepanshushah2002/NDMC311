@@ -494,6 +494,17 @@ html[data-ui-style="cartoon"] .runner-six {
   animation-delay: -14s;
 }
 
+/* Classic dark-mode style switch contrast */
+html[data-theme="dark"]:not([data-ui-style="cartoon"]) .ui-style-toggle-btn {
+  background: #28283b;
+  color: #f8fafc;
+  border-color: rgba(203, 213, 225, .35);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, .35);
+}
+html[data-theme="dark"]:not([data-ui-style="cartoon"]) .ui-style-toggle-btn:hover {
+  background: #34334d;
+  border-color: #a99af5;
+}
 /* Little visitors on the upload card, shown only in cartoon mode. */
 html[data-ui-style="cartoon"] .card {
   overflow: visible;
@@ -567,4 +578,14 @@ html[data-ui-style="cartoon"] .bird-two {
   html[data-ui-style="cartoon"] .perched-bird {
     animation: none !important;
   }
+}
+/* Cartoon dark-mode button contrast */
+html[data-ui-style="cartoon"][data-theme="dark"] .ui-style-toggle-btn {
+  background: #ffe08a;
+  color: #29263b;
+  border-color: #29263b;
+  box-shadow: 3px 3px 0 #29263b;
+}
+html[data-ui-style="cartoon"][data-theme="dark"] .ui-style-toggle-btn:hover {
+  background: #ffd15e;
 }

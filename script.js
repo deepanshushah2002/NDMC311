@@ -1435,7 +1435,7 @@ function initCartoonParallax() {
       raf = 0;
       root.style.setProperty('--cartoon-bg-x1', `${x * -12}px`);
       root.style.setProperty('--cartoon-bg-y1', `${y * -9}px`);
-      root.style.setProperty('--cartoon-bg-x2', `${x * 18}px`);
+      root.style.setProperty('--cartoon-bg-x2', `${x * 15}px`);
       root.style.setProperty('--cartoon-bg-y2', `${y * 13}px`);
       root.style.setProperty('--cartoon-bg-x3', `${x * -22}px`);
       root.style.setProperty('--cartoon-bg-y3', `${y * 16}px`);
@@ -1481,7 +1481,7 @@ function initUIStyleToggle() {
   function sync() {
     if (cartoon) root.setAttribute('data-ui-style', 'cartoon');
     else root.removeAttribute('data-ui-style');
-    button.textContent = cartoon ? '↩ Classic UI' : '🎨 Fun UI';
+    button.textContent = cartoon ? '↩ Classic UI' : '🦖 Fun UI';
     button.setAttribute('aria-pressed', cartoon ? 'true' : 'false');
     button.title = cartoon ? 'Switch back to classic design' : 'Switch to cartoon design';
   }
