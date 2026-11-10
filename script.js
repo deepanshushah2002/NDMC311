@@ -1422,6 +1422,76 @@ function applyTouchHint() {
   }
 }
 
+function initCartoonParallax() {
+  const finePointer = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  if (REDUCED_MOTION || !finePointer) return;
+  const root = document.documentElement;
+  let raf = 0, x = 0, y = 0;
+  window.addEventListener('pointermove', event => {
+    x = (event.clientX / Math.max(window.innerWidth, 1) - 0.5) * 2;
+    y = (event.clientY / Math.max(window.innerHeight, 1) - 0.5) * 2;
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      root.style.setProperty('--cartoon-bg-x1', `${x * -12}px`);
+      root.style.setProperty('--cartoon-bg-y1', `${y * -9}px`);
+      root.style.setProperty('--cartoon-bg-x2', `${x * 18}px`);
+      root.style.setProperty('--cartoon-bg-y2', `${y * 13}px`);
+      root.style.setProperty('--cartoon-bg-x3', `${x * -22}px`);
+      root.style.setProperty('--cartoon-bg-y3', `${y * 16}px`);
+      root.style.setProperty('--cartoon-grid-x', `${x * -7}px`);
+      root.style.setProperty('--cartoon-grid-y', `${y * -6}px`);
+    });
+  }, { passive: true });
+}
+function initRandomBackgroundCharacters() {
+  const faces = ['🏃🏻‍♂️', '🐕', '🐈', '🦆', '🛸', '🐒', '🐢', '🐑', '🐅', '🦌', '🦖', '🐳', '🐼'];
+  document.querySelectorAll('.bg-cartoon-runner').forEach(character => {
+    function pickDifferent() {
+      const current = character.textContent.trim();
+      const choices = faces.filter(face => face !== current);
+      character.textContent = choices[Math.floor(Math.random() * choices.length)];
+    }
+    pickDifferent();
+    character.addEventListener('animationiteration', pickDifferent);
+  });
+}
+function initCardCritters() {
+  document.querySelectorAll('.card').forEach(card => {
+    if (card.querySelector('.card-cartoon-critter')) return;
+    [
+      ['hanging-monkey', '🐒'],
+      ['perched-bird bird-one', '🐦'],
+      ['perched-bird bird-two', '🐤'],
+    ].forEach(([classes, face]) => {
+      const critter = document.createElement('span');
+      critter.className = `card-cartoon-critter ${classes}`;
+      critter.setAttribute('aria-hidden', 'true');
+      critter.textContent = face;
+      card.appendChild(critter);
+    });
+  });
+}
+function initUIStyleToggle() {
+  const button = $('uiStyleToggleBtn');
+  if (!button) return;
+  const root = document.documentElement;
+  let cartoon = false;
+  try { cartoon = localStorage.getItem('ndmc_ui_style') === 'cartoon'; } catch (e) { }
+  function sync() {
+    if (cartoon) root.setAttribute('data-ui-style', 'cartoon');
+    else root.removeAttribute('data-ui-style');
+    button.textContent = cartoon ? '↩ Classic UI' : '🎨 Fun UI';
+    button.setAttribute('aria-pressed', cartoon ? 'true' : 'false');
+    button.title = cartoon ? 'Switch back to classic design' : 'Switch to cartoon design';
+  }
+  button.addEventListener('click', () => {
+    cartoon = !cartoon;
+    try { localStorage.setItem('ndmc_ui_style', cartoon ? 'cartoon' : 'classic'); } catch (e) { }
+    sync();
+  });
+  sync();
+}
 // Disabled nav links should not navigate
 document.addEventListener('click', e => {
   const link = e.target.closest && e.target.closest('.nav-link.is-disabled');
@@ -1433,6 +1503,10 @@ document.addEventListener('DOMContentLoaded', () => {
   safeInit(applyTouchHint, 'touch hint');
   safeInit(checkLibraries, 'library check');
   safeInit(initThemeToggle, 'theme');
+  safeInit(initUIStyleToggle, 'UI style toggle');
+  safeInit(initCartoonParallax, 'cartoon parallax');
+  safeInit(initRandomBackgroundCharacters, 'random cartoon characters');
+  safeInit(initCardCritters, 'card cartoon decorations');
   safeInit(initPreviewControls, 'preview controls');
   safeInit(refreshNav, 'nav');
   safeInit(initCursorLighting, 'cursor lighting');

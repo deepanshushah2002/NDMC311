@@ -14,6 +14,7 @@
         var t = localStorage.getItem('ndmc_theme');
         if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', t);
+        if (localStorage.getItem('ndmc_ui_style') === 'cartoon') document.documentElement.setAttribute('data-ui-style', 'cartoon');
       } catch (e) { }
     })();
   </script>
@@ -31,6 +32,7 @@
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="cartoon-theme.css">
 </head>
 
 <body>
@@ -43,6 +45,12 @@
     <div class="bg-orb orb-2"></div>
     <div class="bg-orb orb-3"></div>
     <div class="bg-grid"></div>
+    <span class="bg-cartoon-runner runner-one" aria-hidden="true">🏃🏻‍♂️</span>
+    <span class="bg-cartoon-runner runner-two" aria-hidden="true">🐕</span>
+    <span class="bg-cartoon-runner runner-three" aria-hidden="true">🐈</span>
+    <span class="bg-cartoon-runner runner-four" aria-hidden="true">🐸</span>
+    <span class="bg-cartoon-runner runner-five" aria-hidden="true">🦆</span>
+    <span class="bg-cartoon-runner runner-six" aria-hidden="true">🛸</span>
   </div>
 
   <!-- Floating Navigation -->
@@ -81,6 +89,8 @@
           <span class="theme-icon sun-icon" aria-hidden="true">☀️</span>
           <span class="theme-icon moon-icon" aria-hidden="true">🌙</span>
         </button>
+
+        <button class="ui-style-toggle-btn" id="uiStyleToggleBtn" type="button" aria-pressed="false" title="Switch to cartoon design">🎨 Fun UI</button>
 
         <div class="nav-status">
           <span class="status-dot"></span>
@@ -122,6 +132,9 @@
 
       <!-- Step 1 -->
       <section class="card tilt-card" id="uploadSection">
+        <span class="card-cartoon-critter hanging-monkey" aria-hidden="true">🐒</span>
+        <span class="card-cartoon-critter perched-bird bird-one" aria-hidden="true">🐦</span>
+        <span class="card-cartoon-critter perched-bird bird-two" aria-hidden="true">🐤</span>
         <div class="card-header">
           <div class="step-badge">01</div>
           <div class="card-titles">
