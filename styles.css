@@ -194,7 +194,7 @@ body {
 }
 
 .theme-transition-light {
-  background: radial-gradient(ellipse at 50% 100%, rgba(255, 255, 255, .58) 0%, rgba(255, 220, 130, .5) 48%, rgba(246, 165, 74, .62) 100%);
+  background: radial-gradient(ellipse at 50% 100%, rgba(255, 255, 255, .58) 0%, rgba(238, 174, 11, 0.5) 48%, rgba(246, 165, 74, .62) 100%);
 }
 
 .theme-transition.is-expanding {
