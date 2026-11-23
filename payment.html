@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment — NDMC 311 Analytics Studio</title>
+  <meta name="description" content="Review your plan and pay securely by scanning the provided QR code.">
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem('ndmc_theme') || ((window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+        if (localStorage.getItem('ndmc_ui_style') === 'cartoon') document.documentElement.setAttribute('data-ui-style', 'cartoon');
+      } catch (e) { }
+    })();
+  </script>
+  <link rel="stylesheet" href="payment.css">
+  <link rel="stylesheet" href="cartoon-theme.css">
+</head>
+
+<body class="payment-page">
+  <div class="bg-scene" aria-hidden="true">
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+    <div class="bg-orb orb-3"></div>
+    <div class="bg-grid"></div>
+  </div>
+  <div class="cursor-spotlight" id="cursorSpotlight" aria-hidden="true"></div>
+
+  <header class="navbar-wrapper">
+    <nav class="navbar" aria-label="Payment navigation">
+      <div class="nav-brand">
+        <div class="brand-logo-3d" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="logo-svg">
+            <defs><linearGradient id="paymentLogoGrad" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse"><stop stop-color="#3b82f6"/><stop offset="0.5" stop-color="#6366f1"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs>
+            <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#paymentLogoGrad)"/>
+            <path d="M9 16L14 21L23 11" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">NDMC 311</span>
+          <span class="brand-tag">Analytics Studio</span>
+        </div>
+      </div>
+      <div class="nav-links">
+        <a href="pricing.html" class="nav-link nav-pricing">Back to plans</a>
+      </div>
+      <div class="nav-actions">
+        <button class="ui-style-toggle-btn" id="paymentUiStyleToggle" type="button" aria-pressed="false" title="Switch to cartoon design">🦖 Fun UI</button>
+        <button class="theme-toggle-btn" id="paymentThemeToggle" data-compact="true" type="button" title="Toggle Dark/Light Mode" aria-label="Toggle theme">
+          <span class="theme-icon sun-icon" aria-hidden="true">☀️</span>
+          <span class="theme-icon moon-icon" aria-hidden="true">🌙</span>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <main class="wrap payment-wrap">
+    <section class="pricing-hero payment-hero">
+      <div class="hero-badge">Secure checkout</div>
+      <h1 class="hero-title">Complete your <span class="gradient-text">payment</span></h1>
+      <p class="hero-subtitle">Review your plan, then scan the QR code with your UPI app.</p>
+    </section>
+
+    <div id="paymentError" class="payment-error" role="alert" hidden></div>
+
+    <section class="payment-layout" aria-label="Payment details">
+      <article class="card payment-qr-card">
+        <div class="payment-section-heading">
+          <span class="payment-step">01</span>
+          <div>
+            <h2>Scan to pay</h2>
+            <p>Use any supported UPI app to scan the QR code.</p>
+          </div>
+        </div>
+        <div class="payment-qr-frame">
+          <div class="payment-qr-placeholder" id="qrPlaceholder">
+            <span class="qr-placeholder-icon" aria-hidden="true">QR</span>
+            <strong>QR image goes here</strong>
+            <span>Add this plan's QR as <code id="qrFileName">payment-assets/&lt;plan&gt;-qr.png</code></span>
+          </div>
+          <img id="paymentQr" alt="Scan this QR code to pay for the selected plan" hidden>
+        </div>
+        <p class="payment-secure-note"><span aria-hidden="true">🔒</span> Check the amount before confirming in your UPI app.</p>
+      </article>
+
+      <article class="card payment-summary-card">
+        <div class="payment-section-heading">
+          <span class="payment-step">02</span>
+          <div>
+            <h2>Order summary</h2>
+            <p>Your selected NDMC Analytics Studio plan.</p>
+          </div>
+        </div>
+        <div class="payment-plan-summary">
+          <div>
+            <span class="payment-plan-label">Selected plan</span>
+            <h3 id="paymentPlanName">Loading plan…</h3>
+            <p id="paymentPlanPeriod" class="payment-plan-period"></p>
+          </div>
+          <strong id="paymentPlanPrice" class="payment-plan-price"></strong>
+        </div>
+        <ul id="paymentFeatures" class="payment-features"></ul>
+        <p class="payment-account-note">After you pay, keep your transaction reference and contact the administrator to verify payment and enable access.</p>
+        <div class="payment-review-note">
+          <strong>After payment</strong>
+          <p>Keep your transaction reference. An administrator must verify the payment and enable your tool access.</p>
+        </div>
+        <a class="payment-back-link" href="pricing.html">← Choose a different plan</a>
+      </article>
+    </section>
+  </main>
+
+  <footer class="modern-footer">
+    <div class="footer-wrap">
+      <div class="footer-brand"><span class="footer-dot"></span><span>NDMC 311 Grievance Intelligence &amp; Reporting System</span></div>
+      <div class="made-by">Designed &amp; built by <strong>Deepanshu Shah</strong></div>
+    </div>
+  </footer>
+
+  <script src="promo.js"></script>
+  <script>
+    (() => {
+      const P = window.NDMCPricing;
+      const params = new URLSearchParams(window.location.search);
+      const requestedPlan = params.get("plan");
+      const plan = P && P.PLANS.find((item) => item.id === requestedPlan);
+      const error = document.getElementById("paymentError");
+      const qr = document.getElementById("paymentQr");
+      const placeholder = document.getElementById("qrPlaceholder");
+      const qrFileName = document.getElementById("qrFileName");
+
+      qr.addEventListener("load", () => {
+        if (qr.naturalWidth > 0) {
+          qr.hidden = false;
+          placeholder.hidden = true;
+        }
+      });
+      qr.addEventListener("error", () => {
+        qr.hidden = true;
+        placeholder.hidden = false;
+      });
+
+      if (!plan) {
+        error.textContent = "That plan was not found. Please return to pricing and choose a plan.";
+        error.hidden = false;
+        document.getElementById("paymentPlanName").textContent = "No plan selected";
+        document.getElementById("paymentPlanPeriod").textContent = "";
+        document.getElementById("paymentPlanPrice").textContent = "";
+      } else {
+        document.getElementById("paymentPlanName").textContent = plan.name;
+        document.getElementById("paymentPlanPeriod").textContent = plan.months === 1 ? "Billed once for 1 month" : "Billed once for " + plan.months + " months";
+        document.getElementById("paymentPlanPrice").textContent = P.rupees(plan.price);
+        qr.alt = "Scan this QR code to pay " + P.rupees(plan.price) + " for the " + plan.name + " plan";
+        qrFileName.textContent = plan.qrImage;
+        qr.src = plan.qrImage;
+        const features = document.getElementById("paymentFeatures");
+        P.FEATURES.forEach((feature) => {
+          const item = document.createElement("li");
+          item.textContent = feature;
+          features.appendChild(item);
+        });
+      }
+
+      if (qr.complete && qr.naturalWidth > 0) {
+        qr.hidden = false;
+        placeholder.hidden = true;
+      }
+    })();
+  </script>
+  <script>
+    (function () {
+      var button = document.getElementById('paymentUiStyleToggle');
+      var cartoon = false;
+      try { cartoon = localStorage.getItem('ndmc_ui_style') === 'cartoon'; } catch (e) { }
+      function sync() {
+        if (cartoon) document.documentElement.setAttribute('data-ui-style', 'cartoon');
+        else document.documentElement.removeAttribute('data-ui-style');
+        button.textContent = cartoon ? '😎 Classic UI' : '🦖 Fun UI';
+        button.setAttribute('aria-pressed', cartoon ? 'true' : 'false');
+        button.title = cartoon ? 'Switch back to classic design' : 'Switch to cartoon design';
+      }
+      button.addEventListener('click', function () {
+        cartoon = !cartoon;
+        try { localStorage.setItem('ndmc_ui_style', cartoon ? 'cartoon' : 'classic'); } catch (e) { }
+        sync();
+      });
+      sync();
+    })();
+
+    document.getElementById('paymentThemeToggle').addEventListener('click', function () {
+      var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('ndmc_theme', next); } catch (e) { }
+    });
+  </script>
+</body>
+
+</html>

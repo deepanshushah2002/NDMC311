@@ -58,7 +58,7 @@ Age is calculated from the complaint date to the selected report date. Missing o
 
 ## Pricing and payment links
 
-Plan names, prices, and payment links are configured in `promo.js`. Current listed prices are ₹199 for one month, ₹999 for six months, and ₹1,999 for one year. The `paymentUrl` values are blank by default, so selecting a plan displays a message instead of starting checkout. Add the appropriate checkout URL to each plan before offering paid access.
+Plan names, prices, and QR image paths are configured in `promo.js`. Current listed prices are ₹199 for one month, ₹999 for six months, and ₹1,999 for one year. Choosing a plan opens `payment.html` with the matching QR image from `payment-assets/`. Payments are verified manually by an administrator; this project does not process or automatically verify payments.
 
 ## Project files
 
@@ -66,6 +66,8 @@ Plan names, prices, and payment links are configured in `promo.js`. Current list
 | --- | --- |
 | `index.html` | Main upload, summary, dashboard, and export interface |
 | `pricing.html` | Pricing page and animated plan prices |
+| `payment.html` | Selected plan summary and matching UPI QR code |
+| `payment-assets/` | QR images for the monthly, 6-month, and yearly plans |
 | `script.js` | Workbook parsing, calculations, dashboard rendering, and exports |
 | `promo.js` | Shared pricing data and plan-selection popup |
 | `styles.css` | Shared layout and visual styles |

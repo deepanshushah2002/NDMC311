@@ -4,9 +4,9 @@
   var BASE_MONTHLY = 199;
 
   var PLANS = [
-    { id: 'monthly', name: '1 Month', months: 1, price: 199, tag: '', paymentUrl: '' },
-    { id: 'half', name: '6 Months', months: 6, price: 999, tag: 'Most popular', featured: true, paymentUrl: '' },
-    { id: 'yearly', name: '1 Year', months: 12, price: 1999, tag: 'Best savings', paymentUrl: '' }
+    { id: 'monthly', name: '1 Month', months: 1, price: 199, tag: '', qrImage: 'payment-assets/one-month-qr.png' },
+    { id: 'half', name: '6 Months', months: 6, price: 999, tag: 'Most popular', featured: true, qrImage: 'payment-assets/six-month-qr.png' },
+    { id: 'yearly', name: '1 Year', months: 12, price: 1999, tag: 'Best savings', qrImage: 'payment-assets/one-year-qr.png' }
   ];
 
   var FEATURES = [
@@ -142,11 +142,7 @@
     var p = PLANS.filter(function (x) { return x.id === id; })[0];
     if (!p) return;
     closeModal();
-    if (p.paymentUrl) {
-      window.open(p.paymentUrl, '_blank', 'noopener');
-    } else {
-      toast(p.name + ' (' + rupees(p.price) + ') selected. Payment link is not set up yet.');
-    }
+    window.location.href = 'payment.html?plan=' + encodeURIComponent(p.id);
   }
 
   // Any element with data-plan="<id>" (popup buttons, pricing-page cards) starts checkout
